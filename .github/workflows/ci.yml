@@ -26,4 +26,4 @@ jobs:
 
     - name: Correr los tests con Cobertura (Minimo 90%)
       run: |
-        pytest --cov=. --cov-report=term-missing --cov-fail-under=90
+        pytest --cov=run_v3 --cov-report=term-missing --cov-fail-under=90
