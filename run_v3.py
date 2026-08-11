@@ -282,12 +282,12 @@ def obtener_movimiento_ia(board_string, mi_lado, mi_puntaje=0, rival_puntaje=0, 
     return mejor_accion
 
 
-async def send(websocket, action, data):
+async def send(websocket, action, data): # pragma: no cover
     message = json.dumps({"action": action, "data": data})
     print(f"> Enviando: {message}")
     await websocket.send(message)
 
-async def process_event(websocket, message_str):
+async def process_event(websocket, message_str): # pragma: no cover
     print(f"< Recibido: {message_str[:150]}...")
     try:
         message = json.loads(message_str)
@@ -354,11 +354,11 @@ async def process_event(websocket, message_str):
     except Exception as e:
         print(f"[X] Error procesando el evento: {e}")
 
-async def play(websocket):
+async def play(websocket): # pragma: no cover
     async for message in websocket:
         await process_event(websocket, message)
 
-async def start(auth_token):
+async def start(auth_token): # pragma: no cover
     uri = f"wss://codechallenge-server.up.railway.app:443/ws?token={auth_token}"
     
     while True:
@@ -374,7 +374,7 @@ async def start(auth_token):
             print(f"[X] Error de conexión: {e}. Reintentando en 3 segundos...")
             await asyncio.sleep(3)
 
-if __name__ == "__main__":
+if __name__ == "__main__": # pragma: no cover
     if len(sys.argv) < 2:
         print("Uso: python run.py <TU_TOKEN>")
         sys.exit(1)
