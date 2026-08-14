@@ -359,19 +359,19 @@ async def play(websocket): # pragma: no cover
         await process_event(websocket, message)
 
 async def start(auth_token): # pragma: no cover
-    uri = f"wss://codechallenge-server.up.railway.app:443/ws?token={auth_token}"
-    
+    uri = "wss://server.codechallenge.net.ar/ws?token={}".format(auth_token)
+
     while True:
         try:
-            print(f"\n[*] Conectando al servidor con V3 parcheada (Anti-Pinning)...")
+            print(f"\n[*] Conectando al servidor...")
             async with websockets.connect(uri) as websocket:
-                print("[*] ¡Conexión establecida exitosamente!")
+                print("\n[*] ¡Conexión establecida exitosamente!")
                 await play(websocket)
         except websockets.ConnectionClosed:
-            print("[!] Conexión cerrada. Reintentando en 3 segundos...")
+            print(" Conexión cerrada. Reintentando en 3 segundos...")
             await asyncio.sleep(3)
         except Exception as e:
-            print(f"[X] Error de conexión: {e}. Reintentando en 3 segundos...")
+            print(f" Error de conexión: {e}. Reintentando en 3 segundos...")
             await asyncio.sleep(3)
 
 if __name__ == "__main__": # pragma: no cover
