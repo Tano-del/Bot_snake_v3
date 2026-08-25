@@ -113,29 +113,28 @@ def astar_distancia(start_pos, objetivo, obstaculos, ancho, alto):
 def analizar_tablero(filas, mi_lado):
     cuerpo, cab_en, comida = [], [], []
     cuerp_en, paredes = set(), set()
-    cabeza = None
-    mi_cuerpo, en_cab = mi_lado.lower(), {'A', 'B'} - {mi_lado}
-    en_cuerp = {'a', 'b'} - {mi_cuerpo}
+    cabeza = []
+    
+    mi_cuerpo = mi_lado.lower()
+    enemigo = list({'A', 'B'} - {mi_lado})[0]
+    enemigo_cuerpo = enemigo.lower()
 
     dic_acciones = {
-        mi_lado: lambda x, y: (x, y),
+        mi_lado: lambda x, y: cabeza.append((x, y)),
         mi_cuerpo: lambda x, y: cuerpo.append((x, y)),
         '*': lambda x, y: comida.append((x, y)),
         '|': lambda x, y: paredes.add((x, y)),
-        '-': lambda x, y: paredes.add((x, y))
+        '-': lambda x, y: paredes.add((x, y)),
+        enemigo: lambda x, y: (cab_en.append((x, y)), cuerp_en.add((x, y))),
+        enemigo_cuerpo: lambda x, y: cuerp_en.add((x, y))
     }
 
     for y, fila in enumerate(filas):
         for x, char in enumerate(fila):
-            if char in dic_acciones:
-                res = dic_acciones[char](x, y)
-                if char == mi_lado: cabeza = res
-            if char in en_cab:
-                cab_en.append((x, y))
-                cuerp_en.add((x, y))
-            if char in en_cuerp: cuerp_en.add((x, y))
+            func = dic_acciones.get(char)
+            if func: func(x, y)
 
-    return cabeza, cuerpo, cab_en, cuerp_en, comida, paredes
+    return cabeza[0] if cabeza else None, cuerpo, cab_en, cuerp_en, comida, paredes
 
 def calcular_peligros(cab_en, ancho, alto):
     zonas = set()
@@ -152,10 +151,14 @@ def es_pasillo(nx, ny, ancho, alto, obs_sim):
     )
     return libres <= 2
 
+def es_borde(nx, ny, ancho, alto):
+    return nx in (0, ancho - 1) or ny in (0, alto - 1)
+
 def evaluar_pasillo_borde(nx, ny, ancho, alto, obs_sim, cab_en, sig_pos, f_dist):
-    borde = (nx == 0 or nx == ancho - 1 or ny == 0 or ny == alto - 1)
-    if (borde or es_pasillo(nx, ny, ancho, alto, obs_sim)) and cab_en:
-        if f_dist(sig_pos) <= 4: return -50000 
+    if not cab_en or f_dist(sig_pos) > 4:
+        return 0
+    if es_borde(nx, ny, ancho, alto) or es_pasillo(nx, ny, ancho, alto, obs_sim):
+        return -50000
     return 0
 
 def evaluar_defensa(sig_pos, zonas, esp, esp_seguro, cola, obs, an, al):
@@ -169,23 +172,26 @@ def evaluar_ofensiva(esp_before, obs_sim, zonas, an, al, est_len, sig_pos, comid
     for cab, antes in esp_before.items():
         despues = calcular_espacio_libre(cab, obs_sim, zonas, an, al, 1000)
         esp_red += max(0, antes - despues)
-        if despues < est_len + 2: posible_kill = True
+        posible_kill = posible_kill or (despues < est_len + 2)
 
-    if esp_red > 0: pts += esp_red * CONFIG['SPACE_KILL_FACTOR']
-    if posible_kill: pts += CONFIG['KILL_VALUE'] * CONFIG['KILL_MULT'] + 300
-    if sig_pos in comida: pts += CONFIG['APPLE_VALUE'] * CONFIG['APPLE_MULT']
+    pts += esp_red * CONFIG['SPACE_KILL_FACTOR']
+    pts += (CONFIG['KILL_VALUE'] * CONFIG['KILL_MULT'] + 300) * int(posible_kill)
+    pts += (CONFIG['APPLE_VALUE'] * CONFIG['APPLE_MULT']) * int(sig_pos in comida)
+    
     return pts, posible_kill
 
 def evaluar_tortuga(sig_pos, zonas, comida, area, mi_pts, riv_pts, dist_en, p_kill):
     pts = 0
     if mi_pts - riv_pts >= CONFIG['TURTLE_THRESHOLD']:
-        if sig_pos in zonas: pts -= 700
-        if sig_pos in comida: pts -= CONFIG['APPLE_VALUE'] * 2
+        pts -= 700 * int(sig_pos in zonas)
+        pts -= (CONFIG['APPLE_VALUE'] * 2) * int(sig_pos in comida)
         pts += area * 3
-    if dist_en == 0: pts -= 6000
-    elif dist_en == 1 and not p_kill: pts -= 1200
-    else: pts += dist_en * 5
-    return pts
+
+    if dist_en == 0:
+        return pts - 6000
+    
+    pts_dist = -1200 if (dist_en == 1 and not p_kill) else (dist_en * 5)
+    return pts + pts_dist
 
 def evaluar_manzanas(sig_pos, obj, d_manz, d_en_com, cx, cy, esp):
     pts = 0
@@ -228,34 +234,33 @@ def mapear_distancias(comida, cabezas, obs, an, al):
 def mapear_espacios(cabezas, obs, zonas, an, al):
     return {c: calcular_espacio_libre(c, obs, zonas, an, al, 1000) for c in cabezas}
 
+def f_dist_factory(cab_en):
+    return lambda pos: min((abs(pos[0]-cx) + abs(pos[1]-cy) for cx, cy in cab_en), default=9999)
+
 def obtener_movimiento_ia(board_string, mi_lado, mi_puntaje=0, rival_puntaje=0, game_id=None):
     filas = board_string.strip('\n').split('\n')
     cab, cuerpo, cab_en, cuerp_en, comida, paredes = analizar_tablero(filas, mi_lado)
-
-    if not cab: return "UP"
-    ancho, alto = (len(filas[0]), len(filas)) if filas else (0, 0)
     
+    if not cab: return "UP"
+    ancho, alto = len(filas[0]), len(filas)
     obs = set(cuerpo) | cuerp_en | paredes
     zonas = calcular_peligros(cab_en, ancho, alto)
-    e_seg = len(cuerpo) + 3 
     
-    dist_manz = mapear_distancias(comida, cab_en, obs, ancho, alto)
-    esp_antes = mapear_espacios(cab_en, obs, zonas, ancho, alto)
-    cola = encontrar_cola(cuerpo, cab)
+    kwargs = (
+        ancho, alto, obs, zonas, len(cuerpo) + 3, encontrar_cola(cuerpo, cab), 
+        cab_en, cuerp_en, comida, mapear_espacios(cab_en, obs, zonas, ancho, alto), 
+        mi_puntaje, rival_puntaje, ancho//2, alto//2, 
+        mapear_distancias(comida, cab_en, obs, ancho, alto), f_dist_factory(cab_en)
+    )
 
-    def f_dist(pos): return min((abs(pos[0]-cx) + abs(pos[1]-cy) for cx, cy in cab_en), default=9999)
-
-    kwargs = (ancho, alto, obs, zonas, e_seg, cola, cab_en, cuerp_en, comida, esp_antes, mi_puntaje, rival_puntaje, ancho//2, alto//2, dist_manz, f_dist)
-    
-    mejor_acc, max_pts = "UP", -999999
-    for dx, dy, accion in [(0, -1, "UP"), (0, 1, "DOWN"), (-1, 0, "LEFT"), (1, 0, "RIGHT")]:
-        nx, ny = cab[0] + dx, cab[1] + dy
+    def get_pts(mov):
+        nx, ny = cab[0] + mov[0], cab[1] + mov[1]
         if 0 <= nx < ancho and 0 <= ny < alto and (nx, ny) not in obs:
-            pts_mov = evaluar_movimiento((nx, ny), cab, kwargs)
-            if pts_mov > max_pts:
-                max_pts, mejor_acc = pts_mov, accion
-                
-    return mejor_acc
+            return evaluar_movimiento((nx, ny), cab, kwargs)
+        return -999999
+
+    opciones = [(0, -1, "UP"), (0, 1, "DOWN"), (-1, 0, "LEFT"), (1, 0, "RIGHT")]
+    return max(opciones, key=get_pts)[2]
 
 
 
