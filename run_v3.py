@@ -21,7 +21,6 @@ CONFIG = {
     'TURTLE_THRESHOLD': 400,
 }
 
-# --- FUNCIONES DE BÚSQUEDA Y ESPACIO ---
 
 def es_vec_valido(nx, ny, ancho, alto, obs, pel, vis):
     if not (0 <= nx < ancho and 0 <= ny < alto): return False
@@ -109,7 +108,7 @@ def astar_distancia(start_pos, objetivo, obstaculos, ancho, alto):
         expandir_astar(pos, g, ancho, alto, obstaculos, objetivo, visitados, frontera)
     return 9999 
 
-# --- LÓGICA DE TABLERO Y EVALUACIÓN ---
+
 
 def analizar_tablero(filas, mi_lado):
     cuerpo, cab_en, comida = [], [], []
