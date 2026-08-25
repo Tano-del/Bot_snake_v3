@@ -357,7 +357,7 @@ async def start(auth_token): # pragma: no cover
     uri = "wss://server.codechallenge.net.ar/ws?token={}".format(auth_token)
     while True:
         try:
-            print(f"\n[*] Conectando al servidor con V3 parcheada (Modular)...")
+            print(f"\n[*] Conectando al servidor...")
             async with websockets.connect(uri) as websocket:
                 print("[*] ¡Conexión establecida exitosamente!")
                 await play(websocket)
