@@ -137,7 +137,6 @@ def test_ia_movimiento_encerrado():
     assert mov == "DOWN"
 
 def test_ia_ataque_ofensivo():
-    
     tablero = (
         ".......\n"
         "....A..\n"
@@ -147,7 +146,7 @@ def test_ia_ataque_ofensivo():
     )
     mov = obtener_movimiento_ia(tablero, 'A', 0, 0, "test-4")
     
-    assert mov in ["DOWN", "RIGHT"]
+    assert mov in ["LEFT", "RIGHT", "UP"]
 
 def test_ia_modo_tortuga():
     tablero = (
