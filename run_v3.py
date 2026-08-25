@@ -143,7 +143,7 @@ def evaluar_pasillo_borde(nx, ny, ancho, alto, obstaculos_sim, cabezas_enemigas,
     return 0
 
 def evaluar_movimiento(siguiente_pos, cabeza_ia, kwargs_eval):
-    # Desempaquetado de variables para limpieza
+    
     (ancho, alto, obstaculos_totales, zonas_peligro, espacio_seguro, 
      cola, cabezas_enemigas, cuerpos_enemigos, comida, espacio_enemigo_before,
      mi_puntaje, rival_puntaje, centro_x, centro_y, dist_enemigo_manzanas, func_distancia) = kwargs_eval
@@ -162,14 +162,14 @@ def evaluar_movimiento(siguiente_pos, cabeza_ia, kwargs_eval):
     obstaculos_sim = set(obstaculos_totales)
     obstaculos_sim.add(siguiente_pos)
 
-    # Evaluación de pasillos y bordes
+
     puntaje_mov += evaluar_pasillo_borde(siguiente_pos[0], siguiente_pos[1], ancho, alto, obstaculos_sim, cabezas_enemigas, siguiente_pos, func_distancia)
 
     self_area = calcular_espacio_libre(siguiente_pos, obstaculos_sim, zonas_peligro, ancho, alto, 1000)
     if self_area < espacio_seguro: puntaje_mov -= 1800
     else: puntaje_mov += self_area * 5
 
-    # Evaluación ofensiva
+   
     espacio_reducido = 0
     enemigo_posible_kill = False
     est_len_enemigo = max(3, len(cuerpos_enemigos) // max(1, len(cabezas_enemigas)))
@@ -184,19 +184,19 @@ def evaluar_movimiento(siguiente_pos, cabeza_ia, kwargs_eval):
     if enemigo_posible_kill: puntaje_mov += CONFIG['KILL_VALUE'] * CONFIG['KILL_MULT'] + 300
     if siguiente_pos in comida: puntaje_mov += CONFIG['APPLE_VALUE'] * CONFIG['APPLE_MULT']
 
-    # Modo Tortuga
+    
     if mi_puntaje - rival_puntaje >= CONFIG['TURTLE_THRESHOLD']:
         puntaje_mov -= 700 * (1 if siguiente_pos in zonas_peligro else 0)
         if siguiente_pos in comida: puntaje_mov -= CONFIG['APPLE_VALUE'] * 2
         puntaje_mov += self_area * 3
 
-    # Distancia al enemigo
+   
     dist_enemigo = func_distancia(siguiente_pos)
     if dist_enemigo == 0: puntaje_mov -= 6000
     elif dist_enemigo == 1 and not enemigo_posible_kill: puntaje_mov -= 1200
     else: puntaje_mov += dist_enemigo * 5
         
-    # Búsqueda de manzanas
+    
     dist_manzana = 9999
     objetivo = None
     for manzana in comida:
@@ -281,16 +281,16 @@ def obtener_movimiento_ia(board_string, mi_lado, mi_puntaje=0, rival_puntaje=0, 
     return mejor_accion
 
 
-async def send(websocket, action, data):
+async def send(websocket, action, data): # pragma: no cover
     message = json.dumps({"action": action, "data": data})
     print(f"> Enviando: {message}")
     await websocket.send(message)
 
-async def handle_challenge(websocket, data):
+async def handle_challenge(websocket, data): # pragma: no cover
     challenge_id = data.get("challenge_id")
     await send(websocket, "accept_challenge", {"challenge_id": challenge_id})
 
-async def handle_your_turn(websocket, data):
+async def handle_your_turn(websocket, data): # pragma: no cover
     game_id = data.get("game_id")
     turn_token = data.get("turn_token")
     board_string = data.get("board")
@@ -315,7 +315,7 @@ async def handle_your_turn(websocket, data):
         "game_id": game_id, "turn_token": turn_token, "direction": movimiento 
     })
 
-def handle_game_over(data):
+def handle_game_over(data): # pragma: no cover
     game_id = data.get("game_id")
     print(f"\n--- [!] Partida {game_id} terminada ---\n")
     with games_lock:
@@ -323,7 +323,7 @@ def handle_game_over(data):
             active_games[game_id]["game_over"] = True
             active_games[game_id]["marcador"] = f"GAME OVER | {active_games[game_id]['marcador']}"
 
-async def process_event(websocket, message_str):
+async def process_event(websocket, message_str): # pragma: no cover
     print(f"< Recibido: {message_str[:150]}...")
     try:
         message = json.loads(message_str)
@@ -349,11 +349,11 @@ async def process_event(websocket, message_str):
         print(f"[X] Error procesando el evento: {e}")
 
 
-async def play(websocket):
+async def play(websocket): # pragma: no cover
     async for message in websocket:
         await process_event(websocket, message)
 
-async def start(auth_token):
+async def start(auth_token): # pragma: no cover
     uri = "wss://server.codechallenge.net.ar/ws?token={}".format(auth_token)
     while True:
         try:
@@ -368,7 +368,7 @@ async def start(auth_token):
             print(f"[X] Error de conexión: {e}. Reintentando...")
             await asyncio.sleep(3)
 
-if __name__ == "__main__":
+if __name__ == "__main__": # pragma: no cover
     if len(sys.argv) < 2:
         print("Uso: python run.py <TU_TOKEN>")
         sys.exit(1)
