@@ -15,17 +15,25 @@ def get_all_games():
     with games_lock:
         return {game_id: data.copy() for game_id, data in active_games.items()}
 
-
 CONFIG = {
-    'APPLE_VALUE': 100,
-    'KILL_VALUE': 1000,
-    'TURN_POINT': 1,
-    'APPLE_MULT': 25,
-    'KILL_MULT': 15,
-    'SPACE_KILL_FACTOR': 30,
+    'APPLE_VALUE': 100, 'KILL_VALUE': 1000, 'TURN_POINT': 1,
+    'APPLE_MULT': 25, 'KILL_MULT': 15, 'SPACE_KILL_FACTOR': 30,
     'TURTLE_THRESHOLD': 400,
 }
 
+# --- FUNCIONES DE BÚSQUEDA Y ESPACIO ---
+
+def es_vec_valido(nx, ny, ancho, alto, obs, pel, vis):
+    if not (0 <= nx < ancho and 0 <= ny < alto): return False
+    sig = (nx, ny)
+    return sig not in obs and sig not in pel and sig not in vis
+
+def agregar_vecinos(x, y, ancho, alto, obs, pel, vis, cola):
+    for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
+        nx, ny = x + dx, y + dy
+        if es_vec_valido(nx, ny, ancho, alto, obs, pel, vis):
+            vis.add((nx, ny))
+            cola.append((nx, ny))
 
 def calcular_espacio_libre(start_pos, obstaculos, zonas_peligro, ancho, alto, limite):
     visitados = {start_pos}
@@ -34,251 +42,222 @@ def calcular_espacio_libre(start_pos, obstaculos, zonas_peligro, ancho, alto, li
     while cola and espacio < limite:
         x, y = cola.popleft()
         espacio += 1
-        for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
-            nx, ny = x + dx, y + dy
-            siguiente = (nx, ny)
-            if 0 <= nx < ancho and 0 <= ny < alto:
-                if siguiente not in obstaculos and siguiente not in zonas_peligro and siguiente not in visitados:
-                    visitados.add(siguiente)
-                    cola.append(siguiente)
+        agregar_vecinos(x, y, ancho, alto, obstaculos, zonas_peligro, visitados, cola)
     return espacio
 
 def heuristica_manhattan(a, b):
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
+def contar_vecinos_cuerpo(segmento, cuerpo_set, cabeza):
+    vecinos = 0
+    for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
+        vec = (segmento[0] + dx, segmento[1] + dy)
+        if vec in cuerpo_set or vec == cabeza: vecinos += 1
+    return vecinos
+
 def encontrar_cola(cuerpo_propio, cabeza):
-    if not cuerpo_propio:
-        return None
+    if not cuerpo_propio: return None
     cuerpo_set = set(cuerpo_propio)
     for segmento in cuerpo_propio:
-        vecinos = 0
-        for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
-            vecino = (segmento[0] + dx, segmento[1] + dy)
-            if vecino in cuerpo_set or vecino == cabeza:
-                vecinos += 1
-        if vecinos == 1:
+        if contar_vecinos_cuerpo(segmento, cuerpo_set, cabeza) == 1:
             return segmento
     return cuerpo_propio[-1]
+
+def vecino_camino_ok(nx, ny, ancho, alto, obs, obj, vis):
+    if not (0 <= nx < ancho and 0 <= ny < alto): return False
+    sig = (nx, ny)
+    if sig in vis: return False
+    return sig == obj or sig not in obs
+
+def expandir_camino(pos, ancho, alto, obs, obj, vis, cola):
+    for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
+        nx, ny = pos[0] + dx, pos[1] + dy
+        if vecino_camino_ok(nx, ny, ancho, alto, obs, obj, vis):
+            vis.add((nx, ny))
+            cola.append((nx, ny))
 
 def hay_camino_a_objetivo(start_pos, objetivo, obstaculos, ancho, alto):
     visitados = {start_pos}
     cola = deque([start_pos])
     while cola:
         pos = cola.popleft()
-        if pos == objetivo:
-            return True
-        for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
-            nx, ny = pos[0] + dx, pos[1] + dy
-            siguiente = (nx, ny)
-            if 0 <= nx < ancho and 0 <= ny < alto and siguiente not in visitados:
-                if siguiente == objetivo or siguiente not in obstaculos:
-                    visitados.add(siguiente)
-                    cola.append(siguiente)
+        if pos == objetivo: return True
+        expandir_camino(pos, ancho, alto, obstaculos, objetivo, visitados, cola)
     return False
+
+def astar_vecino_ok(nx, ny, ancho, alto, obs):
+    return 0 <= nx < ancho and 0 <= ny < alto and (nx, ny) not in obs
+
+def expandir_astar(pos, g, ancho, alto, obs, obj, vis, frontera):
+    for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
+        nx, ny = pos[0] + dx, pos[1] + dy
+        sig = (nx, ny)
+        if astar_vecino_ok(nx, ny, ancho, alto, obs):
+            nuevo_g = g + 1
+            if sig not in vis or nuevo_g < vis[sig]:
+                vis[sig] = nuevo_g
+                prioridad = nuevo_g + heuristica_manhattan(sig, obj)
+                heapq.heappush(frontera, (prioridad, nuevo_g, sig))
 
 def astar_distancia(start_pos, objetivo, obstaculos, ancho, alto):
     if start_pos == objetivo: return 0
-    
-    frontera = []
-    heapq.heappush(frontera, (0, 0, start_pos))
+    frontera = [(0, 0, start_pos)]
     visitados = {start_pos: 0}
-    
     while frontera:
         f, g, pos = heapq.heappop(frontera)
-        if pos == objetivo:
-            return g
-            
-        for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
-            nx, ny = pos[0] + dx, pos[1] + dy
-            sig = (nx, ny)
-            if 0 <= nx < ancho and 0 <= ny < alto and sig not in obstaculos:
-                nuevo_costo_g = g + 1
-                if sig not in visitados or nuevo_costo_g < visitados[sig]:
-                    visitados[sig] = nuevo_costo_g
-                    prioridad_f = nuevo_costo_g + heuristica_manhattan(sig, objetivo)
-                    heapq.heappush(frontera, (prioridad_f, nuevo_costo_g, sig))
+        if pos == objetivo: return g
+        expandir_astar(pos, g, ancho, alto, obstaculos, objetivo, visitados, frontera)
     return 9999 
 
+# --- LÓGICA DE TABLERO Y EVALUACIÓN ---
+
 def analizar_tablero(filas, mi_lado):
-    mi_cuerpo_char = mi_lado.lower()
-    cuerpo_propio, cuerpos_enemigos, cabezas_enemigas = [], set(), []
-    comida, paredes, cabeza = [], set(), None
-    
+    cuerpo, cab_en, comida = [], [], []
+    cuerp_en, paredes = set(), set()
+    cabeza = None
+    mi_cuerpo, en_cab = mi_lado.lower(), {'A', 'B'} - {mi_lado}
+    en_cuerp = {'a', 'b'} - {mi_cuerpo}
+
+    dic_acciones = {
+        mi_lado: lambda x, y: (x, y),
+        mi_cuerpo: lambda x, y: cuerpo.append((x, y)),
+        '*': lambda x, y: comida.append((x, y)),
+        '|': lambda x, y: paredes.add((x, y)),
+        '-': lambda x, y: paredes.add((x, y))
+    }
+
     for y, fila in enumerate(filas):
         for x, char in enumerate(fila):
-            if char == mi_lado: cabeza = (x, y)
-            elif char == mi_cuerpo_char: cuerpo_propio.append((x, y))
-            elif char in ['A', 'B'] and char != mi_lado:
-                cabezas_enemigas.append((x, y))
-                cuerpos_enemigos.add((x, y))
-            elif char in ['a', 'b'] and char != mi_cuerpo_char:
-                cuerpos_enemigos.add((x, y))
-            elif char == '*': comida.append((x, y))
-            elif char in ['|', '-']: paredes.add((x, y))
-            
-    return cabeza, cuerpo_propio, cabezas_enemigas, cuerpos_enemigos, comida, paredes
+            if char in dic_acciones:
+                res = dic_acciones[char](x, y)
+                if char == mi_lado: cabeza = res
+            if char in en_cab:
+                cab_en.append((x, y))
+                cuerp_en.add((x, y))
+            if char in en_cuerp: cuerp_en.add((x, y))
 
-def calcular_peligros(cabezas_enemigas, ancho, alto):
-    zonas_peligro = set()
-    for cx, cy in cabezas_enemigas:
+    return cabeza, cuerpo, cab_en, cuerp_en, comida, paredes
+
+def calcular_peligros(cab_en, ancho, alto):
+    zonas = set()
+    for cx, cy in cab_en:
         for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
-            nx, ny = cx + dx, cy + dy
-            if 0 <= nx < ancho and 0 <= ny < alto:
-                zonas_peligro.add((nx, ny))
-    return zonas_peligro
+            if 0 <= cx + dx < ancho and 0 <= cy + dy < alto:
+                zonas.add((cx + dx, cy + dy))
+    return zonas
 
-def evaluar_pasillo_borde(nx, ny, ancho, alto, obstaculos_sim, cabezas_enemigas, siguiente_pos, func_distancia):
-    es_borde = (nx == 0 or nx == ancho - 1 or ny == 0 or ny == alto - 1)
-    
-    casilleros_libres = sum(
+def es_pasillo(nx, ny, ancho, alto, obs_sim):
+    libres = sum(
         1 for vx, vy in [(0, -1), (0, 1), (-1, 0), (1, 0)]
-        if 0 <= (nx + vx) < ancho and 0 <= (ny + vy) < alto and (nx + vx, ny + vy) not in obstaculos_sim
+        if 0 <= (nx + vx) < ancho and 0 <= (ny + vy) < alto and (nx + vx, ny + vy) not in obs_sim
     )
-                
-    es_pasillo = casilleros_libres <= 2
+    return libres <= 2
 
-    if (es_borde or es_pasillo) and cabezas_enemigas:
-        if func_distancia(siguiente_pos) <= 4:
-            return -50000 
+def evaluar_pasillo_borde(nx, ny, ancho, alto, obs_sim, cab_en, sig_pos, f_dist):
+    borde = (nx == 0 or nx == ancho - 1 or ny == 0 or ny == alto - 1)
+    if (borde or es_pasillo(nx, ny, ancho, alto, obs_sim)) and cab_en:
+        if f_dist(sig_pos) <= 4: return -50000 
     return 0
 
-def evaluar_movimiento(siguiente_pos, cabeza_ia, kwargs_eval):
-    
-    (ancho, alto, obstaculos_totales, zonas_peligro, espacio_seguro, 
-     cola, cabezas_enemigas, cuerpos_enemigos, comida, espacio_enemigo_before,
-     mi_puntaje, rival_puntaje, centro_x, centro_y, dist_enemigo_manzanas, func_distancia) = kwargs_eval
+def evaluar_defensa(sig_pos, zonas, esp, esp_seguro, cola, obs, an, al):
+    pts = -1400 if sig_pos in zonas else 0
+    pts += esp * 8 if esp >= esp_seguro else -3200
+    if cola and not hay_camino_a_objetivo(sig_pos, cola, obs, an, al): pts -= 4200
+    return pts
 
-    puntaje_mov = 0
-    if siguiente_pos in zonas_peligro: puntaje_mov -= 1400
-        
-    espacio = calcular_espacio_libre(siguiente_pos, obstaculos_totales, zonas_peligro, ancho, alto, 100)
-    
-    if espacio < espacio_seguro: puntaje_mov -= 3200
-    else: puntaje_mov += espacio * 8
+def evaluar_ofensiva(esp_before, obs_sim, zonas, an, al, est_len, sig_pos, comida):
+    pts, esp_red, posible_kill = 0, 0, False
+    for cab, antes in esp_before.items():
+        despues = calcular_espacio_libre(cab, obs_sim, zonas, an, al, 1000)
+        esp_red += max(0, antes - despues)
+        if despues < est_len + 2: posible_kill = True
 
-    if cola and not hay_camino_a_objetivo(siguiente_pos, cola, obstaculos_totales, ancho, alto):
-        puntaje_mov -= 4200
+    if esp_red > 0: pts += esp_red * CONFIG['SPACE_KILL_FACTOR']
+    if posible_kill: pts += CONFIG['KILL_VALUE'] * CONFIG['KILL_MULT'] + 300
+    if sig_pos in comida: pts += CONFIG['APPLE_VALUE'] * CONFIG['APPLE_MULT']
+    return pts, posible_kill
 
-    obstaculos_sim = set(obstaculos_totales)
-    obstaculos_sim.add(siguiente_pos)
+def evaluar_tortuga(sig_pos, zonas, comida, area, mi_pts, riv_pts, dist_en, p_kill):
+    pts = 0
+    if mi_pts - riv_pts >= CONFIG['TURTLE_THRESHOLD']:
+        if sig_pos in zonas: pts -= 700
+        if sig_pos in comida: pts -= CONFIG['APPLE_VALUE'] * 2
+        pts += area * 3
+    if dist_en == 0: pts -= 6000
+    elif dist_en == 1 and not p_kill: pts -= 1200
+    else: pts += dist_en * 5
+    return pts
 
-
-    puntaje_mov += evaluar_pasillo_borde(siguiente_pos[0], siguiente_pos[1], ancho, alto, obstaculos_sim, cabezas_enemigas, siguiente_pos, func_distancia)
-
-    self_area = calcular_espacio_libre(siguiente_pos, obstaculos_sim, zonas_peligro, ancho, alto, 1000)
-    if self_area < espacio_seguro: puntaje_mov -= 1800
-    else: puntaje_mov += self_area * 5
-
-   
-    espacio_reducido = 0
-    enemigo_posible_kill = False
-    est_len_enemigo = max(3, len(cuerpos_enemigos) // max(1, len(cabezas_enemigas)))
-    
-    for cab_en, antes in espacio_enemigo_before.items():
-        despues = calcular_espacio_libre(cab_en, obstaculos_sim, zonas_peligro, ancho, alto, 1000)
-        espacio_reducido += max(0, antes - despues)
-        if despues < est_len_enemigo + 2:
-            enemigo_posible_kill = True
-
-    if espacio_reducido > 0: puntaje_mov += espacio_reducido * CONFIG['SPACE_KILL_FACTOR']
-    if enemigo_posible_kill: puntaje_mov += CONFIG['KILL_VALUE'] * CONFIG['KILL_MULT'] + 300
-    if siguiente_pos in comida: puntaje_mov += CONFIG['APPLE_VALUE'] * CONFIG['APPLE_MULT']
-
-    
-    if mi_puntaje - rival_puntaje >= CONFIG['TURTLE_THRESHOLD']:
-        puntaje_mov -= 700 * (1 if siguiente_pos in zonas_peligro else 0)
-        if siguiente_pos in comida: puntaje_mov -= CONFIG['APPLE_VALUE'] * 2
-        puntaje_mov += self_area * 3
-
-   
-    dist_enemigo = func_distancia(siguiente_pos)
-    if dist_enemigo == 0: puntaje_mov -= 6000
-    elif dist_enemigo == 1 and not enemigo_posible_kill: puntaje_mov -= 1200
-    else: puntaje_mov += dist_enemigo * 5
-        
-    
-    dist_manzana = 9999
-    objetivo = None
-    for manzana in comida:
-        dist = astar_distancia(siguiente_pos, manzana, obstaculos_totales, ancho, alto)
-        if dist < dist_manzana:
-            dist_manzana = dist
-            objetivo = manzana
-            
-    if objetivo:
-        dist_enemigo_comida = dist_enemigo_manzanas.get(objetivo, 9999)
-        if dist_manzana < dist_enemigo_comida: puntaje_mov += max(0, 4000 - dist_manzana * 60)
-        elif dist_manzana == dist_enemigo_comida: puntaje_mov += max(0, 2000 - dist_manzana * 30)
-        else:
-            puntaje_mov -= 1000 
-            dist_centro = abs(siguiente_pos[0] - centro_x) + abs(siguiente_pos[1] - centro_y)
-            puntaje_mov += max(0, 200 - dist_centro * 8)
-        puntaje_mov += max(0, 1500 - dist_manzana * 40)
+def evaluar_manzanas(sig_pos, obj, d_manz, d_en_com, cx, cy, esp):
+    pts = 0
+    if obj:
+        if d_manz < d_en_com: pts += max(0, 4000 - d_manz * 60)
+        elif d_manz == d_en_com: pts += max(0, 2000 - d_manz * 30)
+        else: pts += max(0, 200 - (abs(sig_pos[0]-cx) + abs(sig_pos[1]-cy)) * 8) - 1000
+        pts += max(0, 1500 - d_manz * 40)
     else:
-        dist_centro = abs(siguiente_pos[0] - centro_x) + abs(siguiente_pos[1] - centro_y)
-        puntaje_mov += espacio * 3
-        puntaje_mov -= dist_centro * 3
+        pts += esp * 3 - (abs(sig_pos[0]-cx) + abs(sig_pos[1]-cy)) * 3
+    return pts
 
-    return puntaje_mov
+def evaluar_movimiento(sig_pos, cab_ia, kwargs_eval):
+    an, al, obs_tot, zonas, e_seg, cola, cab_en, cuerp_en, comida, esp_bef, mi_pts, riv_pts, cx, cy, d_en_manz, f_dist = kwargs_eval
+    
+    espacio = calcular_espacio_libre(sig_pos, obs_tot, zonas, an, al, 100)
+    pts = evaluar_defensa(sig_pos, zonas, espacio, e_seg, cola, obs_tot, an, al)
 
+    obs_sim = set(obs_tot) | {sig_pos}
+    pts += evaluar_pasillo_borde(sig_pos[0], sig_pos[1], an, al, obs_sim, cab_en, sig_pos, f_dist)
+
+    area = calcular_espacio_libre(sig_pos, obs_sim, zonas, an, al, 1000)
+    pts += area * 5 if area >= e_seg else -1800
+
+    est_len = max(3, len(cuerp_en) // max(1, len(cab_en)))
+    p_ofensiva, posible_kill = evaluar_ofensiva(esp_bef, obs_sim, zonas, an, al, est_len, sig_pos, comida)
+    pts += p_ofensiva
+
+    pts += evaluar_tortuga(sig_pos, zonas, comida, area, mi_pts, riv_pts, f_dist(sig_pos), posible_kill)
+
+    mejor_d, mejor_obj = min(((astar_distancia(sig_pos, m, obs_tot, an, al), m) for m in comida), default=(9999, None))
+    d_en_comida = d_en_manz.get(mejor_obj, 9999) if mejor_obj else 9999
+    pts += evaluar_manzanas(sig_pos, mejor_obj, mejor_d, d_en_comida, cx, cy, espacio)
+    
+    return pts
+
+def mapear_distancias(comida, cabezas, obs, an, al):
+    return {m: min((astar_distancia(c, m, obs, an, al) for c in cabezas), default=9999) for m in comida}
+
+def mapear_espacios(cabezas, obs, zonas, an, al):
+    return {c: calcular_espacio_libre(c, obs, zonas, an, al, 1000) for c in cabezas}
 
 def obtener_movimiento_ia(board_string, mi_lado, mi_puntaje=0, rival_puntaje=0, game_id=None):
     filas = board_string.strip('\n').split('\n')
-    cabeza, cuerpo_propio, cabezas_enemigas, cuerpos_enemigos, comida, paredes = analizar_tablero(filas, mi_lado)
+    cab, cuerpo, cab_en, cuerp_en, comida, paredes = analizar_tablero(filas, mi_lado)
 
-    if not cabeza: return "UP"
-
-    ancho = len(filas[0]) if filas else 0
-    alto = len(filas)
-    centro_x, centro_y = ancho // 2, alto // 2 
+    if not cab: return "UP"
+    ancho, alto = (len(filas[0]), len(filas)) if filas else (0, 0)
     
-    obstaculos_totales = set(cuerpo_propio) | cuerpos_enemigos | paredes
-    zonas_peligro = calcular_peligros(cabezas_enemigas, ancho, alto)
-
-    espacio_seguro_minimo = len(cuerpo_propio) + 3 
+    obs = set(cuerpo) | cuerp_en | paredes
+    zonas = calcular_peligros(cab_en, ancho, alto)
+    e_seg = len(cuerpo) + 3 
     
-    distancia_enemigo_manzana = {}
-    for manzana in comida:
-        min_dist = 9999
-        for cab_en in cabezas_enemigas:
-            dist = astar_distancia(cab_en, manzana, obstaculos_totales, ancho, alto)
-            if dist < min_dist: min_dist = dist
-        distancia_enemigo_manzana[manzana] = min_dist
+    dist_manz = mapear_distancias(comida, cab_en, obs, ancho, alto)
+    esp_antes = mapear_espacios(cab_en, obs, zonas, ancho, alto)
+    cola = encontrar_cola(cuerpo, cab)
 
-    cola = encontrar_cola(cuerpo_propio, cabeza)
+    def f_dist(pos): return min((abs(pos[0]-cx) + abs(pos[1]-cy) for cx, cy in cab_en), default=9999)
 
-    espacio_enemigo_before = {
-        cab_en: calcular_espacio_libre(cab_en, obstaculos_totales, zonas_peligro, ancho, alto, 1000)
-        for cab_en in cabezas_enemigas
-    }
-
-    def distancia_a_cabeza_enemiga(pos):
-        if not cabezas_enemigas: return 9999
-        return min(abs(pos[0] - cx) + abs(pos[1] - cy) for cx, cy in cabezas_enemigas)
-
-    mejor_accion = "UP"
-    max_puntaje = -999999
+    kwargs = (ancho, alto, obs, zonas, e_seg, cola, cab_en, cuerp_en, comida, esp_antes, mi_puntaje, rival_puntaje, ancho//2, alto//2, dist_manz, f_dist)
     
-    kwargs_eval = (
-        ancho, alto, obstaculos_totales, zonas_peligro, espacio_seguro_minimo, 
-        cola, cabezas_enemigas, cuerpos_enemigos, comida, espacio_enemigo_before,
-        mi_puntaje, rival_puntaje, centro_x, centro_y, distancia_enemigo_manzana, distancia_a_cabeza_enemiga
-    )
-    
+    mejor_acc, max_pts = "UP", -999999
     for dx, dy, accion in [(0, -1, "UP"), (0, 1, "DOWN"), (-1, 0, "LEFT"), (1, 0, "RIGHT")]:
-        nx, ny = cabeza[0] + dx, cabeza[1] + dy
-        siguiente_pos = (nx, ny)
-        
-        if not (0 <= nx < ancho and 0 <= ny < alto): continue
-        if siguiente_pos in obstaculos_totales: continue
-        
-        puntaje_movimiento = evaluar_movimiento(siguiente_pos, cabeza, kwargs_eval)
+        nx, ny = cab[0] + dx, cab[1] + dy
+        if 0 <= nx < ancho and 0 <= ny < alto and (nx, ny) not in obs:
+            pts_mov = evaluar_movimiento((nx, ny), cab, kwargs)
+            if pts_mov > max_pts:
+                max_pts, mejor_acc = pts_mov, accion
+                
+    return mejor_acc
 
-        if puntaje_movimiento > max_puntaje:
-            max_puntaje = puntaje_movimiento
-            mejor_accion = accion
-
-    return mejor_accion
 
 
 async def send(websocket, action, data): # pragma: no cover
@@ -301,19 +280,12 @@ async def handle_your_turn(websocket, data): # pragma: no cover
     marcador = f"{jugador_1}: {puntaje_1} pts  |  {jugador_2}: {puntaje_2} pts"
 
     with games_lock:
-        if game_id in active_games and active_games[game_id].get("game_over"):
-            return 
-        active_games[game_id] = {
-            "tablero": board_string, "marcador": marcador,
-            "side": side, "game_over": False
-        }
+        if game_id in active_games and active_games[game_id].get("game_over"): return 
+        active_games[game_id] = {"tablero": board_string, "marcador": marcador, "side": side, "game_over": False}
     
-    mi_puntaje, rival_puntaje = (puntaje_1, puntaje_2) if side == 'A' else (puntaje_2, puntaje_1)
-    movimiento = obtener_movimiento_ia(board_string, side, mi_puntaje, rival_puntaje, game_id)
-    
-    await send(websocket, "move", {
-        "game_id": game_id, "turn_token": turn_token, "direction": movimiento 
-    })
+    mi_pts, riv_pts = (puntaje_1, puntaje_2) if side == 'A' else (puntaje_2, puntaje_1)
+    mov = obtener_movimiento_ia(board_string, side, mi_pts, riv_pts, game_id)
+    await send(websocket, "move", {"game_id": game_id, "turn_token": turn_token, "direction": mov})
 
 def handle_game_over(data): # pragma: no cover
     game_id = data.get("game_id")
@@ -328,33 +300,23 @@ async def process_event(websocket, message_str): # pragma: no cover
     try:
         message = json.loads(message_str)
         event, data = message.get("event"), message.get("data", {})
-
         eventos_handlers = {
             "challenge": lambda: handle_challenge(websocket, data),
             "your_turn": lambda: handle_your_turn(websocket, data),
-            "game_over": lambda: handle_game_over(data),
-            "list_users": lambda: None,
-            "update_user_list": lambda: None
+            "game_over": lambda: handle_game_over(data)
         }
-
         handler = eventos_handlers.get(event)
         if handler:
             result = handler()
-            if asyncio.iscoroutine(result):
-                await result
-
-    except json.JSONDecodeError:
-        print("[X] Error: El servidor no envió un JSON válido.")
-    except Exception as e:
-        print(f"[X] Error procesando el evento: {e}")
-
+            if asyncio.iscoroutine(result): await result
+    except json.JSONDecodeError: print("[X] Error JSON")
+    except Exception as e: print(f"[X] Error: {e}")
 
 async def play(websocket): # pragma: no cover
-    async for message in websocket:
-        await process_event(websocket, message)
+    async for message in websocket: await process_event(websocket, message)
 
 async def start(auth_token): # pragma: no cover
-    uri = "wss://server.codechallenge.net.ar/ws?token={}".format(auth_token)
+    uri = f"wss://server.codechallenge.net.ar/ws?token={auth_token}"
     while True:
         try:
             print(f"\n[*] Conectando al servidor...")
@@ -362,33 +324,24 @@ async def start(auth_token): # pragma: no cover
                 print("[*] ¡Conexión establecida exitosamente!")
                 await play(websocket)
         except websockets.ConnectionClosed:
-            print("[!] Conexión cerrada. Reintentando...")
             await asyncio.sleep(3)
         except Exception as e:
-            print(f"[X] Error de conexión: {e}. Reintentando...")
             await asyncio.sleep(3)
 
 if __name__ == "__main__": # pragma: no cover
     if len(sys.argv) < 2:
-        print("Uso: python run.py <TU_TOKEN>")
+        print("Uso: python run_v3.py <TU_TOKEN>")
         sys.exit(1)
     
     token = sys.argv[1]
 
     def run_asyncio_client():
-        try:
-            asyncio.run(start(token))
-        except KeyboardInterrupt:
-            pass
+        try: asyncio.run(start(token))
+        except KeyboardInterrupt: pass
 
-    hilo_websocket = threading.Thread(
-        target=run_asyncio_client, daemon=True, name="WebSocketClient"
-    )
+    hilo_websocket = threading.Thread(target=run_asyncio_client, daemon=True, name="WebSocketClient")
     hilo_websocket.start()
     
-    try:
-        iniciar_interfaz_multitab(get_all_games)
-    except KeyboardInterrupt:
-        print("\n[*] Interfaz detenida manualmente.")
-    finally:
-        print("\n[*] Saliendo...")
+    try: iniciar_interfaz_multitab(get_all_games)
+    except Exception:
+        while True: pass
