@@ -74,7 +74,7 @@ def test_analizar_tablero_enemigo():
     _, _, cab_en, cuerp_en, _, _ = analizar_tablero(tablero, 'A')
     
     assert cab_en == [(1, 2)]
-    assert cuerp_en == [(0, 2), (1, 2)]
+    assert cuerp_en == {(0, 2), (1, 2)}
 
 def test_analizar_tablero_entorno():
     tablero = ["|A|", "-*-", "bB."]
