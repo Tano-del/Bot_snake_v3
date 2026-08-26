@@ -24,6 +24,6 @@ jobs:
         python -m pip install --upgrade pip
         pip install pytest pytest-cov websockets torch numpy xenon
 
-    - name: Correr los tests con Cobertura (Minimo 90%)
+    - name: Correr los tests con Cobertura
       run: |
         pytest --cov=run_v3 --cov-report=term-missing --cov-fail-under=90
