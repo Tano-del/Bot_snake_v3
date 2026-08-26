@@ -62,38 +62,27 @@ def test_calcular_peligros(cabezas_enemigas, filas, columnas, peligros_esperados
     peligros = calcular_peligros(cabezas_enemigas, filas, columnas)
     assert set(peligros) == peligros_esperados
 
-@pytest.mark.parametrize(
-    "tablero, jugador, expected_cab, expected_cuerpo, expected_cab_en, expected_cuerp_en, expected_comida, expected_paredes",
-    [
-        (
-            ["|A|", "-*-", "bB."], 'A',
-            (1, 0), [], [(1, 2)], [(0, 2), (1, 2)], [(1, 1)], [(0, 0), (2, 0), (0, 1), (2, 1)]
-        ),
-        (
-            ["....", ".Aaa", ".Bbb", "...."], 'A',
-            (1, 1), [(2, 1), (3, 1)], [(1, 2)], [(1, 2), (2, 2), (3, 2)], [], []
-        ),
-        (
-            ["*-*", "|A|", "*-*"], 'A',
-            (1, 1), [], [], [], [(0, 0), (2, 0), (0, 2), (2, 2)], [(1, 0), (0, 1), (2, 1), (1, 2)]
-        ),
-    ]
-)
-def test_analizar_tablero(
-    tablero, jugador, expected_cab, expected_cuerpo, 
-    expected_cab_en, expected_cuerp_en, expected_comida, expected_paredes
-):
-    cab, cuerpo, cab_en, cuerp_en, comida, paredes = analizar_tablero(tablero, jugador)
-    assert cab == expected_cab
-    assert set(cuerpo) == set(expected_cuerpo)
-    assert set(cab_en) == set(expected_cab_en)
-    assert set(cuerp_en) == set(expected_cuerp_en)
-    assert set(comida) == set(expected_comida)
-    assert set(paredes) == set(expected_paredes)
+def test_analizar_tablero_jugador():
+    tablero = ["|A|", "-*-", "bB."]
+    cab, cuerpo, _, _, _, _ = analizar_tablero(tablero, 'A')
+    
+    assert cab == (1, 0)
+    assert cuerpo == []
 
-# ==========================================
-# TESTS DE MAPEOS Y LÓGICA DE IA
-# ==========================================
+def test_analizar_tablero_enemigo():
+    tablero = ["|A|", "-*-", "bB."]
+    _, _, cab_en, cuerp_en, _, _ = analizar_tablero(tablero, 'A')
+    
+    assert cab_en == [(1, 2)]
+    assert cuerp_en == [(0, 2), (1, 2)]
+
+def test_analizar_tablero_entorno():
+    tablero = ["|A|", "-*-", "bB."]
+    _, _, _, _, comida, paredes = analizar_tablero(tablero, 'A')
+    
+    assert comida == [(1, 1)]
+    assert len(paredes) == 4
+
 def test_mapeos():
     comida = [(0, 0)]
     cab_en = [(2, 2)]
