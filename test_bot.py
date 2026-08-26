@@ -1,4 +1,6 @@
 import pytest
+import subprocess
+
 from run_v3 import (
     heuristica_manhattan,
     calcular_espacio_libre,
@@ -13,6 +15,20 @@ from run_v3 import (
     obtener_movimiento_ia
 )
 
+def test_calidad_codigo_xenon():
+    """Verifica que todo el código en run_v3.py mantenga calificación 'A'."""
+    comando = [
+        "xenon", 
+        "--max-absolute", "A", 
+        "--max-modules", "A", 
+        "--max-average", "A", 
+        "run_v3.py"
+    ]
+    
+    resultado = subprocess.run(comando, capture_output=True, text=True)
+    
+    mensaje_error = f"El código bajó de 'A' en Xenon.\nDetalles:\n{resultado.stdout}\n{resultado.stderr}"
+    assert resultado.returncode == 0, mensaje_error
 
 def test_distancia_manhattan():
     assert heuristica_manhattan((0, 0), (3, 4)) == 7
