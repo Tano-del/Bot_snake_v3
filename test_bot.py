@@ -13,6 +13,7 @@ from run_v3 import (
     obtener_movimiento_ia
 )
 
+
 def test_distancia_manhattan():
     assert heuristica_manhattan((0, 0), (3, 4)) == 7
     assert heuristica_manhattan((5, 5), (5, 5)) == 0
@@ -46,7 +47,6 @@ def test_encontrar_cola():
     cuerpo = [(2, 3), (2, 4), (2, 5)]
     assert encontrar_cola(cuerpo, cabeza) == (2, 5)
     assert encontrar_cola([], cabeza) is None
-
 
 @pytest.mark.parametrize(
     "cabezas_enemigas, filas, columnas, peligros_esperados",
@@ -91,6 +91,9 @@ def test_analizar_tablero(
     assert set(comida) == set(expected_comida)
     assert set(paredes) == set(expected_paredes)
 
+# ==========================================
+# TESTS DE MAPEOS Y LÓGICA DE IA
+# ==========================================
 def test_mapeos():
     comida = [(0, 0)]
     cab_en = [(2, 2)]
@@ -102,16 +105,16 @@ def test_mapeos():
     assert espacios[(2, 2)] > 0
 
 def test_ia_sin_cabeza():
-    tablero_vacio = [
+    tablero_vacio = "\n".join([
         ".......",
         "...*...",
         "....B.."
-    ]
+    ])
     mov = obtener_movimiento_ia(tablero_vacio, 'A', 0, 0, "test-1")
     assert mov == "UP" 
 
 def test_ia_movimiento_basico():
-    tablero = [
+    tablero = "\n".join([
         ".......",
         "...*...",
         "..Aaa..",
@@ -119,51 +122,52 @@ def test_ia_movimiento_basico():
         "..b....",
         "..B....",
         "......."
-    ]
+    ])
     mov_a = obtener_movimiento_ia(tablero, 'A', 0, 0, "test-2")
     assert mov_a in ["UP", "DOWN", "LEFT", "RIGHT"]
+    
     mov_b = obtener_movimiento_ia(tablero, 'B', 0, 0, "test-2")
     assert mov_b in ["UP", "DOWN", "LEFT", "RIGHT"]
 
 def test_ia_movimiento_encerrado():
-    tablero = [
+    tablero = "\n".join([
         "|-|....",
         "|A|....",
         "|.B....",
         "......."
-    ]
+    ])
     mov = obtener_movimiento_ia(tablero, 'A', 0, 0, "test-3")
     assert mov == "DOWN"
 
 def test_ia_ataque_ofensivo():
-    tablero = [
+    tablero = "\n".join([
         ".......",
         "....A..",
         "....B.|",
         "....b.|",
         "....b.|"
-    ]
+    ])
     mov = obtener_movimiento_ia(tablero, 'A', 0, 0, "test-4")
     assert mov in ["LEFT", "RIGHT", "UP"]
 
 def test_ia_modo_tortuga():
-    tablero = [
+    tablero = "\n".join([
         ".......",
         "...*...",
         "..A....",
         ".......",
         "....B..",
         "......."
-    ]
+    ])
     mov = obtener_movimiento_ia(tablero, 'A', 600, 0, "test-5")
     assert mov in ["UP", "DOWN", "LEFT", "RIGHT"]
 
 def test_ia_evitar_peligro():
-    tablero = [
+    tablero = "\n".join([
         ".......",
         "..A....",
         "..B....",
         "......."
-    ]
+    ])
     mov = obtener_movimiento_ia(tablero, 'A', 0, 0, "test-6")
     assert mov in ["UP", "LEFT", "RIGHT"]
