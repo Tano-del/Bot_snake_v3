@@ -170,7 +170,8 @@ def evaluar_defensa(sig_pos, zonas, esp, esp_seguro, cola, obs, an, al):
 def evaluar_ofensiva(esp_before, obs_sim, zonas, an, al, est_len, sig_pos, comida):
     pts, esp_red, posible_kill = 0, 0, False
     for cab, antes in esp_before.items():
-        despues = calcular_espacio_libre(cab, obs_sim, zonas, an, al, 1000)
+        # Límite dinámico (an * al) en vez de 1000
+        despues = calcular_espacio_libre(cab, obs_sim, zonas, an, al, an * al)
         esp_red += max(0, antes - despues)
         posible_kill = posible_kill or (despues < est_len + 2)
 
@@ -207,13 +208,15 @@ def evaluar_manzanas(sig_pos, obj, d_manz, d_en_com, cx, cy, esp):
 def evaluar_movimiento(sig_pos, cab_ia, kwargs_eval):
     an, al, obs_tot, zonas, e_seg, cola, cab_en, cuerp_en, comida, esp_bef, mi_pts, riv_pts, cx, cy, d_en_manz, f_dist = kwargs_eval
     
-    espacio = calcular_espacio_libre(sig_pos, obs_tot, zonas, an, al, 100)
+    area_total = an * al
+    
+    espacio = calcular_espacio_libre(sig_pos, obs_tot, zonas, an, al, area_total)
     pts = evaluar_defensa(sig_pos, zonas, espacio, e_seg, cola, obs_tot, an, al)
 
     obs_sim = set(obs_tot) | {sig_pos}
     pts += evaluar_pasillo_borde(sig_pos[0], sig_pos[1], an, al, obs_sim, cab_en, sig_pos, f_dist)
 
-    area = calcular_espacio_libre(sig_pos, obs_sim, zonas, an, al, 1000)
+    area = calcular_espacio_libre(sig_pos, obs_sim, zonas, an, al, area_total)
     pts += area * 5 if area >= e_seg else -1800
 
     est_len = max(3, len(cuerp_en) // max(1, len(cab_en)))
@@ -232,7 +235,7 @@ def mapear_distancias(comida, cabezas, obs, an, al):
     return {m: min((astar_distancia(c, m, obs, an, al) for c in cabezas), default=9999) for m in comida}
 
 def mapear_espacios(cabezas, obs, zonas, an, al):
-    return {c: calcular_espacio_libre(c, obs, zonas, an, al, 1000) for c in cabezas}
+    return {c: calcular_espacio_libre(c, obs, zonas, an, al, an * al) for c in cabezas}
 
 def f_dist_factory(cab_en):
     return lambda pos: min((abs(pos[0]-cx) + abs(pos[1]-cy) for cx, cy in cab_en), default=9999)
