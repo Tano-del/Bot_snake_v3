@@ -30,3 +30,4 @@ jobs:
     - name: Analizar complejidad del código con Xenon
       run: |
         xenon --max-absolute A --max-modules A --max-average A .
+        echo "Codigo aprobado con A"
