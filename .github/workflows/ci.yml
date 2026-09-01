@@ -27,3 +27,6 @@ jobs:
     - name: Correr los tests con Cobertura
       run: |
         pytest --cov=run_v3 --cov-report=term-missing --cov-fail-under=90
+    - name: Analizar complejidad del código con Xenon
+      run: |
+        xenon --max-absolute A --max-modules A --max-average A .
