@@ -3,7 +3,6 @@ import itertools
 import json
 import os
 import sys
-from statistics import mean
 
 import run_v3
 from simulator import run_batch, simulate_match
