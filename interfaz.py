@@ -47,7 +47,7 @@ def iniciar_interfaz_multitab(get_games_func):
                 )
                 etiqueta_marcador.pack(pady=5)
                 
-                canvas = tk.Canvas(frame, width=340, height=300, bg="black", highlightthickness=0)
+                canvas = tk.Canvas(frame, width=100, height=100, bg="black", highlightthickness=0)
                 canvas.pack(padx=5, pady=5)
                 
                 pestanas[game_id] = {
@@ -70,6 +70,11 @@ def iniciar_interfaz_multitab(get_games_func):
             mi_lado_str = data["side"]
             
             filas = tablero_actual_str.strip('\n').split('\n')
+            
+            ancho_tablero = len(filas[0]) * TAMAÑO_CELDA
+            alto_tablero = len(filas) * TAMAÑO_CELDA
+            canvas.config(width=ancho_tablero, height=alto_tablero)
+            
             char_mi_cabeza = mi_lado_str
             char_mi_cuerpo = mi_lado_str.lower()
             
