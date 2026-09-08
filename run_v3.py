@@ -129,7 +129,8 @@ def analizar_tablero(filas, mi_lado):
         enemigo: lambda x, y: (cab_en.append((x, y)), cuerp_en.add((x, y))),
         enemigo_cuerpo: lambda x, y: cuerp_en.add((x, y))
     }
-        for char in "123456789*":
+    
+    for char in "123456789*":
         dic_acciones[char] = lambda x, y, c=char: comida_raw.append((c, x, y))
 
     for y, fila in enumerate(filas):
@@ -142,8 +143,10 @@ def analizar_tablero(filas, mi_lado):
     
     comida = asteriscos + [pos for d, pos in nums.items() if (d - 2) % 9 + 1 not in nums]
     comida_mala = {pos for d, pos in nums.items() if (d - 2) % 9 + 1 in nums}
+    
+    paredes.update(comida_mala)
 
-    return cabeza[0] if cabeza else None, cuerpo, cab_en, cuerp_en, comida, paredes, comida_mala
+    return cabeza[0] if cabeza else None, cuerpo, cab_en, cuerp_en, comida, paredes
 
 def calcular_peligros(cab_en, ancho, alto):
     zonas = set()
@@ -253,11 +256,11 @@ def f_dist_factory(cab_en):
 
 def obtener_movimiento_ia(board_string, mi_lado, mi_puntaje=0, rival_puntaje=0, game_id=None):
     filas = board_string.strip('\n').split('\n')
-    cab, cuerpo, cab_en, cuerp_en, comida, paredes, comida_mala = analizar_tablero(filas, mi_lado)
+    cab, cuerpo, cab_en, cuerp_en, comida, paredes = analizar_tablero(filas, mi_lado)
     
     if not cab: return "UP"
     ancho, alto = len(filas[0]), len(filas)
-    obs = set(cuerpo) | cuerp_en | paredes | comida_mala
+    obs = set(cuerpo) | cuerp_en | paredes
     zonas = calcular_peligros(cab_en, ancho, alto)
     
     kwargs = (
@@ -275,7 +278,6 @@ def obtener_movimiento_ia(board_string, mi_lado, mi_puntaje=0, rival_puntaje=0, 
 
     opciones = [(0, -1, "UP"), (0, 1, "DOWN"), (-1, 0, "LEFT"), (1, 0, "RIGHT")]
     return max(opciones, key=get_pts)[2]
-
 
 
 async def send(websocket, action, data): # pragma: no cover
