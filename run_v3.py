@@ -16,11 +16,9 @@ def get_all_games():
         return {game_id: data.copy() for game_id, data in active_games.items()}
 
 CONFIG = {
-
     'APPLE_VALUE': 100, 'KILL_VALUE': 1000, 'TURN_POINT': 1,
     'APPLE_MULT': 25, 'KILL_MULT': 15, 'SPACE_KILL_FACTOR': 30,
     'TURTLE_THRESHOLD': 1000,
-
 }
 
 
@@ -110,7 +108,25 @@ def astar_distancia(start_pos, objetivo, obstaculos, ancho, alto):
         expandir_astar(pos, g, ancho, alto, obstaculos, objetivo, visitados, frontera)
     return 9999 
 
+def clasificar_comida(comida_raw):
+    asteriscos, nums = [], {}
+    for c, x, y in comida_raw:
+        if c == '*': asteriscos.append((x, y))
+        else: nums[int(c)] = (x, y)
+        
+    c_buena, c_mala = [], set()
+    for d, pos in nums.items():
+        if ((d - 2) % 9 + 1) in nums:
+            c_mala.add(pos)
+        else:
+            c_buena.append(pos)
+    return asteriscos + c_buena, c_mala
 
+def escanear_tablero(filas, dic_acciones):
+    for y, fila in enumerate(filas):
+        for x, char in enumerate(fila):
+            func = dic_acciones.get(char)
+            if func: func(x, y)
 
 def analizar_tablero(filas, mi_lado):
     cuerpo, cab_en, comida_raw = [], [], []
@@ -133,20 +149,13 @@ def analizar_tablero(filas, mi_lado):
     for char in "123456789*":
         dic_acciones[char] = lambda x, y, c=char: comida_raw.append((c, x, y))
 
-    for y, fila in enumerate(filas):
-        for x, char in enumerate(fila):
-            func = dic_acciones.get(char)
-            if func: func(x, y)
-
-    asteriscos = [(x, y) for c, x, y in comida_raw if c == '*']
-    nums = {int(c): (x, y) for c, x, y in comida_raw if c != '*'}
+    escanear_tablero(filas, dic_acciones)
     
-    comida = asteriscos + [pos for d, pos in nums.items() if (d - 2) % 9 + 1 not in nums]
-    comida_mala = {pos for d, pos in nums.items() if (d - 2) % 9 + 1 in nums}
-    
+    comida, comida_mala = clasificar_comida(comida_raw)
     paredes.update(comida_mala)
 
-    return cabeza[0] if cabeza else None, cuerpo, cab_en, cuerp_en, comida, paredes
+    cab_res = cabeza[0] if cabeza else None
+    return cab_res, cuerpo, cab_en, cuerp_en, comida, paredes
 
 def calcular_peligros(cab_en, ancho, alto):
     zonas = set()
