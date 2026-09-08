@@ -16,9 +16,11 @@ def get_all_games():
         return {game_id: data.copy() for game_id, data in active_games.items()}
 
 CONFIG = {
+
     'APPLE_VALUE': 100, 'KILL_VALUE': 1000, 'TURN_POINT': 1,
-    'APPLE_MULT': 35, 'KILL_MULT': 25, 'SPACE_KILL_FACTOR': 35,
-    'TURTLE_THRESHOLD': 1000,
+    'APPLE_MULT': 25, 'KILL_MULT': 15, 'SPACE_KILL_FACTOR': 30,
+    'TURTLE_THRESHOLD': 400,
+
 }
 
 
