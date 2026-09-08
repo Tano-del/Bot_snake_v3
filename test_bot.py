@@ -12,7 +12,7 @@ from run_v3 import (
     es_pasillo,
     mapear_distancias,
     mapear_espacios,
-    obtener_movimiento_ia
+    obtener_movimiento_ia,
     clasificar_comida
 )
 
