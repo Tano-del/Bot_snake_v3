@@ -16,11 +16,9 @@ def get_all_games():
         return {game_id: data.copy() for game_id, data in active_games.items()}
 
 CONFIG = {
-
     'APPLE_VALUE': 100, 'KILL_VALUE': 1000, 'TURN_POINT': 1,
     'APPLE_MULT': 25, 'KILL_MULT': 15, 'SPACE_KILL_FACTOR': 30,
     'TURTLE_THRESHOLD': 1000,
-
 }
 
 
@@ -110,10 +108,28 @@ def astar_distancia(start_pos, objetivo, obstaculos, ancho, alto):
         expandir_astar(pos, g, ancho, alto, obstaculos, objetivo, visitados, frontera)
     return 9999 
 
+def clasificar_comida(comida_raw):
+    asteriscos, nums = [], {}
+    for c, x, y in comida_raw:
+        if c == '*': asteriscos.append((x, y))
+        else: nums[int(c)] = (x, y)
+        
+    c_buena, c_mala = [], set()
+    for d, pos in nums.items():
+        if ((d - 2) % 9 + 1) in nums:
+            c_mala.add(pos)
+        else:
+            c_buena.append(pos)
+    return asteriscos + c_buena, c_mala
 
+def escanear_tablero(filas, dic_acciones):
+    for y, fila in enumerate(filas):
+        for x, char in enumerate(fila):
+            func = dic_acciones.get(char)
+            if func: func(x, y)
 
 def analizar_tablero(filas, mi_lado):
-    cuerpo, cab_en, comida = [], [], []
+    cuerpo, cab_en, comida_raw = [], [], []
     cuerp_en, paredes = set(), set()
     cabeza = []
     
@@ -124,19 +140,22 @@ def analizar_tablero(filas, mi_lado):
     dic_acciones = {
         mi_lado: lambda x, y: cabeza.append((x, y)),
         mi_cuerpo: lambda x, y: cuerpo.append((x, y)),
-        '*': lambda x, y: comida.append((x, y)),
         '|': lambda x, y: paredes.add((x, y)),
         '-': lambda x, y: paredes.add((x, y)),
         enemigo: lambda x, y: (cab_en.append((x, y)), cuerp_en.add((x, y))),
         enemigo_cuerpo: lambda x, y: cuerp_en.add((x, y))
     }
+    
+    for char in "123456789*":
+        dic_acciones[char] = lambda x, y, c=char: comida_raw.append((c, x, y))
 
-    for y, fila in enumerate(filas):
-        for x, char in enumerate(fila):
-            func = dic_acciones.get(char)
-            if func: func(x, y)
+    escanear_tablero(filas, dic_acciones)
+    
+    comida, comida_mala = clasificar_comida(comida_raw)
+    paredes.update(comida_mala)
 
-    return cabeza[0] if cabeza else None, cuerpo, cab_en, cuerp_en, comida, paredes
+    cab_res = cabeza[0] if cabeza else None
+    return cab_res, cuerpo, cab_en, cuerp_en, comida, paredes
 
 def calcular_peligros(cab_en, ancho, alto):
     zonas = set()
@@ -268,7 +287,6 @@ def obtener_movimiento_ia(board_string, mi_lado, mi_puntaje=0, rival_puntaje=0, 
 
     opciones = [(0, -1, "UP"), (0, 1, "DOWN"), (-1, 0, "LEFT"), (1, 0, "RIGHT")]
     return max(opciones, key=get_pts)[2]
-
 
 
 async def send(websocket, action, data): # pragma: no cover

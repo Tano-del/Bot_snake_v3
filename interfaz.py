@@ -87,7 +87,7 @@ def iniciar_interfaz_multitab(get_games_func):
                     
                     if char in ['|', '-']:
                         canvas.create_image(pos_x, pos_y, image=imagenes["muro"], anchor="nw")
-                    elif char == '*':
+                    elif char == '*' or char.isdigit():
                         canvas.create_image(pos_x, pos_y, image=imagenes["manzana"], anchor="nw")
                     elif char == char_mi_cabeza:
                         canvas.create_image(pos_x, pos_y, image=imagenes["mi_cabeza"], anchor="nw")
