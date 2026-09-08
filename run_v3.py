@@ -19,7 +19,7 @@ CONFIG = {
 
     'APPLE_VALUE': 100, 'KILL_VALUE': 1000, 'TURN_POINT': 1,
     'APPLE_MULT': 25, 'KILL_MULT': 15, 'SPACE_KILL_FACTOR': 30,
-    'TURTLE_THRESHOLD': 400,
+    'TURTLE_THRESHOLD': 1000,
 
 }
 
@@ -157,22 +157,24 @@ def es_borde(nx, ny, ancho, alto):
     return nx in (0, ancho - 1) or ny in (0, alto - 1)
 
 def evaluar_pasillo_borde(nx, ny, ancho, alto, obs_sim, cab_en, sig_pos, f_dist):
-    if not cab_en or f_dist(sig_pos) > 4:
+    if not cab_en: 
         return 0
-    if es_borde(nx, ny, ancho, alto) or es_pasillo(nx, ny, ancho, alto, obs_sim):
-        return -50000
-    return 0
+    
+    dist_cabeza = f_dist(sig_pos)
+    pts_pasillo = -60000 * int(dist_cabeza <= 8 and es_pasillo(nx, ny, ancho, alto, obs_sim))
+    pts_borde = -15000 * int(dist_cabeza <= 4 and es_borde(nx, ny, ancho, alto))
+    
+    return pts_pasillo + pts_borde
 
 def evaluar_defensa(sig_pos, zonas, esp, esp_seguro, cola, obs, an, al):
     pts = -1400 if sig_pos in zonas else 0
     pts += esp * 8 if esp >= esp_seguro else -3200
-    if cola and not hay_camino_a_objetivo(sig_pos, cola, obs, an, al): pts -= 4200
+    if cola and not hay_camino_a_objetivo(sig_pos, cola, obs, an, al): pts -= 8000
     return pts
 
 def evaluar_ofensiva(esp_before, obs_sim, zonas, an, al, est_len, sig_pos, comida):
     pts, esp_red, posible_kill = 0, 0, False
     for cab, antes in esp_before.items():
-        # Límite dinámico (an * al) en vez de 1000
         despues = calcular_espacio_libre(cab, obs_sim, zonas, an, al, an * al)
         esp_red += max(0, antes - despues)
         posible_kill = posible_kill or (despues < est_len + 2)
@@ -219,7 +221,7 @@ def evaluar_movimiento(sig_pos, cab_ia, kwargs_eval):
     pts += evaluar_pasillo_borde(sig_pos[0], sig_pos[1], an, al, obs_sim, cab_en, sig_pos, f_dist)
 
     area = calcular_espacio_libre(sig_pos, obs_sim, zonas, an, al, area_total)
-    pts += area * 5 if area >= e_seg else -1800
+    pts += area * 8 if area >= e_seg else -4000
 
     est_len = max(3, len(cuerp_en) // max(1, len(cab_en)))
     p_ofensiva, posible_kill = evaluar_ofensiva(esp_bef, obs_sim, zonas, an, al, est_len, sig_pos, comida)
