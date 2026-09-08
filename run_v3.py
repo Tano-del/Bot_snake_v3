@@ -113,7 +113,7 @@ def astar_distancia(start_pos, objetivo, obstaculos, ancho, alto):
 
 
 def analizar_tablero(filas, mi_lado):
-    cuerpo, cab_en, comida = [], [], []
+    cuerpo, cab_en, comida_raw = [], [], []
     cuerp_en, paredes = set(), set()
     cabeza = []
     
@@ -124,19 +124,26 @@ def analizar_tablero(filas, mi_lado):
     dic_acciones = {
         mi_lado: lambda x, y: cabeza.append((x, y)),
         mi_cuerpo: lambda x, y: cuerpo.append((x, y)),
-        '*': lambda x, y: comida.append((x, y)),
         '|': lambda x, y: paredes.add((x, y)),
         '-': lambda x, y: paredes.add((x, y)),
         enemigo: lambda x, y: (cab_en.append((x, y)), cuerp_en.add((x, y))),
         enemigo_cuerpo: lambda x, y: cuerp_en.add((x, y))
     }
+        for char in "123456789*":
+        dic_acciones[char] = lambda x, y, c=char: comida_raw.append((c, x, y))
 
     for y, fila in enumerate(filas):
         for x, char in enumerate(fila):
             func = dic_acciones.get(char)
             if func: func(x, y)
 
-    return cabeza[0] if cabeza else None, cuerpo, cab_en, cuerp_en, comida, paredes
+    asteriscos = [(x, y) for c, x, y in comida_raw if c == '*']
+    nums = {int(c): (x, y) for c, x, y in comida_raw if c != '*'}
+    
+    comida = asteriscos + [pos for d, pos in nums.items() if (d - 2) % 9 + 1 not in nums]
+    comida_mala = {pos for d, pos in nums.items() if (d - 2) % 9 + 1 in nums}
+
+    return cabeza[0] if cabeza else None, cuerpo, cab_en, cuerp_en, comida, paredes, comida_mala
 
 def calcular_peligros(cab_en, ancho, alto):
     zonas = set()
@@ -246,11 +253,11 @@ def f_dist_factory(cab_en):
 
 def obtener_movimiento_ia(board_string, mi_lado, mi_puntaje=0, rival_puntaje=0, game_id=None):
     filas = board_string.strip('\n').split('\n')
-    cab, cuerpo, cab_en, cuerp_en, comida, paredes = analizar_tablero(filas, mi_lado)
+    cab, cuerpo, cab_en, cuerp_en, comida, paredes, comida_mala = analizar_tablero(filas, mi_lado)
     
     if not cab: return "UP"
     ancho, alto = len(filas[0]), len(filas)
-    obs = set(cuerpo) | cuerp_en | paredes
+    obs = set(cuerpo) | cuerp_en | paredes | comida_mala
     zonas = calcular_peligros(cab_en, ancho, alto)
     
     kwargs = (
