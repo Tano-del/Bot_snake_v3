@@ -13,6 +13,7 @@ from run_v3 import (
     mapear_distancias,
     mapear_espacios,
     obtener_movimiento_ia
+    clasificar_comida
 )
 
 def test_calidad_codigo_xenon():
@@ -176,3 +177,38 @@ def test_ia_evitar_peligro():
     ])
     mov = obtener_movimiento_ia(tablero, 'A', 0, 0, "test-6")
     assert mov in ["UP", "LEFT", "RIGHT"]
+def test_clasificar_comida():
+    comida_raw = [
+        ('*', 1, 1), 
+        ('3', 2, 2), 
+        ('4', 3, 3), 
+        ('1', 4, 4)  
+    ]
+    
+    comida_buena, comida_mala = clasificar_comida(comida_raw)
+    
+    assert len(comida_buena) == 3
+    assert set(comida_buena) == {(1, 1), (2, 2), (4, 4)}
+    
+    assert len(comida_mala) == 1
+    assert set(comida_mala) == {(3, 3)}
+
+def test_ia_con_numeros_nueva_regla():
+    tablero = "\n".join([
+        ".......",
+        "...3...", 
+        "..A.4..",
+        ".......",
+        "..b....",
+        "..B....",
+        "......."
+    ])
+    
+    mov_a = obtener_movimiento_ia(tablero, 'A', 0, 0, "test-numeros")
+    assert mov_a in ["UP", "DOWN", "LEFT", "RIGHT"]
+    
+    filas = tablero.strip('\n').split('\n')
+    cab, cuerpo, cab_en, cuerp_en, comida, paredes = analizar_tablero(filas, 'A')
+    
+    assert (3, 1) in comida
+    assert (4, 2) in paredes
