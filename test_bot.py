@@ -194,7 +194,7 @@ def test_clasificar_comida():
     assert len(comida_mala) == 1
     assert set(comida_mala) == {(3, 3)}
 
-def test_ia_con_numeros_nueva_regla():
+def test_ia_movimiento_nueva_regla():
     tablero = "\n".join([
         ".......",
         "...3...", 
@@ -207,11 +207,21 @@ def test_ia_con_numeros_nueva_regla():
     
     mov_a = obtener_movimiento_ia(tablero, 'A', 0, 0, 1, "test-numeros")
     assert mov_a in ["UP", "DOWN", "LEFT", "RIGHT"]
+
+def test_analizar_tablero_nueva_regla():
+    filas = [
+        ".......",
+        "...3...", 
+        "..A.4..",
+        "...X...",
+        "..b..#.",
+        "..B....",
+        "......."
+    ]
     
-    filas = tablero.strip('\n').split('\n')
-    cab, cuerpo, cab_en, cuerp_en, comida, paredes, pickups = analizar_tablero(filas, 'A')
+    _, _, _, _, comida, paredes, pickups = analizar_tablero(filas, 'A')
     
     assert (3, 1) in comida
     assert (4, 2) in paredes
-    assert (5, 4) in paredes # El # es una pared
-    assert (3, 3) in pickups # La X
+    assert (5, 4) in paredes 
+    assert (3, 3) in pickups 
