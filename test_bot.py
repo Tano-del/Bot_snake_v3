@@ -80,25 +80,25 @@ def test_calcular_peligros(cabezas_enemigas, filas, columnas, peligros_esperados
     assert set(peligros) == peligros_esperados
 
 def test_analizar_tablero_jugador():
-    tablero = ["|A|", "-*-", "bB."]
-    cab, cuerpo, _, _, _, _ = analizar_tablero(tablero, 'A')
+    tablero = ["|A|", "-X-", "bB#"]
+    cab, cuerpo, _, _, _, _, _ = analizar_tablero(tablero, 'A')
     
     assert cab == (1, 0)
     assert cuerpo == []
 
 def test_analizar_tablero_enemigo():
     tablero = ["|A|", "-*-", "bB."]
-    _, _, cab_en, cuerp_en, _, _ = analizar_tablero(tablero, 'A')
+    _, _, cab_en, cuerp_en, _, _, _ = analizar_tablero(tablero, 'A')
     
     assert cab_en == [(1, 2)]
     assert cuerp_en == {(0, 2), (1, 2)}
 
 def test_analizar_tablero_entorno():
-    tablero = ["|A|", "-*-", "bB."]
-    _, _, _, _, comida, paredes = analizar_tablero(tablero, 'A')
+    tablero = ["|A|", "-X-", "bB#"]
+    _, _, _, _, _, paredes, pickups = analizar_tablero(tablero, 'A')
     
-    assert comida == [(1, 1)]
-    assert len(paredes) == 4
+    assert (1, 1) in pickups # La X es un pickup
+    assert len(paredes) == 5 # 4 palos + 1 muro (#)
 
 def test_mapeos():
     comida = [(0, 0)]
@@ -116,7 +116,7 @@ def test_ia_sin_cabeza():
         "...*...",
         "....B.."
     ])
-    mov = obtener_movimiento_ia(tablero_vacio, 'A', 0, 0, "test-1")
+    mov = obtener_movimiento_ia(tablero_vacio, 'A', 0, 0, 1, "test-1")
     assert mov == "UP" 
 
 def test_ia_movimiento_basico():
@@ -129,10 +129,10 @@ def test_ia_movimiento_basico():
         "..B....",
         "......."
     ])
-    mov_a = obtener_movimiento_ia(tablero, 'A', 0, 0, "test-2")
+    mov_a = obtener_movimiento_ia(tablero, 'A', 0, 0, 1, "test-2")
     assert mov_a in ["UP", "DOWN", "LEFT", "RIGHT"]
     
-    mov_b = obtener_movimiento_ia(tablero, 'B', 0, 0, "test-2")
+    mov_b = obtener_movimiento_ia(tablero, 'B', 0, 0, 1, "test-2")
     assert mov_b in ["UP", "DOWN", "LEFT", "RIGHT"]
 
 def test_ia_movimiento_encerrado():
@@ -142,7 +142,7 @@ def test_ia_movimiento_encerrado():
         "|.B....",
         "......."
     ])
-    mov = obtener_movimiento_ia(tablero, 'A', 0, 0, "test-3")
+    mov = obtener_movimiento_ia(tablero, 'A', 0, 0, 1, "test-3")
     assert mov == "DOWN"
 
 def test_ia_ataque_ofensivo():
@@ -153,7 +153,7 @@ def test_ia_ataque_ofensivo():
         "....b.|",
         "....b.|"
     ])
-    mov = obtener_movimiento_ia(tablero, 'A', 0, 0, "test-4")
+    mov = obtener_movimiento_ia(tablero, 'A', 0, 0, 1, "test-4")
     assert mov in ["LEFT", "RIGHT", "UP"]
 
 def test_ia_modo_tortuga():
@@ -165,7 +165,7 @@ def test_ia_modo_tortuga():
         "....B..",
         "......."
     ])
-    mov = obtener_movimiento_ia(tablero, 'A', 600, 0, "test-5")
+    mov = obtener_movimiento_ia(tablero, 'A', 600, 0, 1, "test-5")
     assert mov in ["UP", "DOWN", "LEFT", "RIGHT"]
 
 def test_ia_evitar_peligro():
@@ -175,8 +175,9 @@ def test_ia_evitar_peligro():
         "..B....",
         "......."
     ])
-    mov = obtener_movimiento_ia(tablero, 'A', 0, 0, "test-6")
+    mov = obtener_movimiento_ia(tablero, 'A', 0, 0, 1, "test-6")
     assert mov in ["UP", "LEFT", "RIGHT"]
+
 def test_clasificar_comida():
     comida_raw = [
         ('*', 1, 1), 
@@ -193,22 +194,34 @@ def test_clasificar_comida():
     assert len(comida_mala) == 1
     assert set(comida_mala) == {(3, 3)}
 
-def test_ia_con_numeros_nueva_regla():
+def test_ia_movimiento_nueva_regla():
     tablero = "\n".join([
         ".......",
         "...3...", 
         "..A.4..",
-        ".......",
-        "..b....",
+        "...X...",
+        "..b..#.",
         "..B....",
         "......."
     ])
     
-    mov_a = obtener_movimiento_ia(tablero, 'A', 0, 0, "test-numeros")
+    mov_a = obtener_movimiento_ia(tablero, 'A', 0, 0, 1, "test-numeros")
     assert mov_a in ["UP", "DOWN", "LEFT", "RIGHT"]
+
+def test_analizar_tablero_nueva_regla():
+    filas = [
+        ".......",
+        "...3...", 
+        "..A.4..",
+        "...X...",
+        "..b..#.",
+        "..B....",
+        "......."
+    ]
     
-    filas = tablero.strip('\n').split('\n')
-    cab, cuerpo, cab_en, cuerp_en, comida, paredes = analizar_tablero(filas, 'A')
+    _, _, _, _, comida, paredes, pickups = analizar_tablero(filas, 'A')
     
     assert (3, 1) in comida
     assert (4, 2) in paredes
+    assert (5, 4) in paredes 
+    assert (3, 3) in pickups 
