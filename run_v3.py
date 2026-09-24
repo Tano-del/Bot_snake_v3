@@ -19,6 +19,7 @@ CONFIG = {
     'APPLE_VALUE': 100, 'KILL_VALUE': 1000, 'TURN_POINT': 1,
     'APPLE_MULT': 25, 'KILL_MULT': 15, 'SPACE_KILL_FACTOR': 30,
     'TURTLE_THRESHOLD': 1000,
+    'X_BONUS': 4000 
 }
 
 
@@ -131,7 +132,7 @@ def escanear_tablero(filas, dic_acciones):
 def analizar_tablero(filas, mi_lado):
     cuerpo, cab_en, comida_raw = [], [], []
     cuerp_en, paredes = set(), set()
-    cabeza = []
+    cabeza, pickups = [], []
     
     mi_cuerpo = mi_lado.lower()
     enemigo = list({'A', 'B'} - {mi_lado})[0]
@@ -142,6 +143,8 @@ def analizar_tablero(filas, mi_lado):
         mi_cuerpo: lambda x, y: cuerpo.append((x, y)),
         '|': lambda x, y: paredes.add((x, y)),
         '-': lambda x, y: paredes.add((x, y)),
+        '#': lambda x, y: paredes.add((x, y)), 
+        'X': lambda x, y: pickups.append((x, y)), 
         enemigo: lambda x, y: (cab_en.append((x, y)), cuerp_en.add((x, y))),
         enemigo_cuerpo: lambda x, y: cuerp_en.add((x, y))
     }
@@ -155,7 +158,7 @@ def analizar_tablero(filas, mi_lado):
     paredes.update(comida_mala)
 
     cab_res = cabeza[0] if cabeza else None
-    return cab_res, cuerpo, cab_en, cuerp_en, comida, paredes
+    return cab_res, cuerpo, cab_en, cuerp_en, comida, paredes, pickups
 
 def calcular_peligros(cab_en, ancho, alto):
     zonas = set()
@@ -191,7 +194,7 @@ def evaluar_defensa(sig_pos, zonas, esp, esp_seguro, cola, obs, an, al):
     if cola and not hay_camino_a_objetivo(sig_pos, cola, obs, an, al): pts -= 8000
     return pts
 
-def evaluar_ofensiva(esp_before, obs_sim, zonas, an, al, est_len, sig_pos, comida):
+def evaluar_ofensiva(esp_before, obs_sim, zonas, an, al, est_len, sig_pos, comida, pickups, mi_mult):
     pts, esp_red, posible_kill = 0, 0, False
     for cab, antes in esp_before.items():
         despues = calcular_espacio_libre(cab, obs_sim, zonas, an, al, an * al)
@@ -200,7 +203,8 @@ def evaluar_ofensiva(esp_before, obs_sim, zonas, an, al, est_len, sig_pos, comid
 
     pts += esp_red * CONFIG['SPACE_KILL_FACTOR']
     pts += (CONFIG['KILL_VALUE'] * CONFIG['KILL_MULT'] + 300) * int(posible_kill)
-    pts += (CONFIG['APPLE_VALUE'] * CONFIG['APPLE_MULT']) * int(sig_pos in comida)
+    pts += (CONFIG['APPLE_VALUE'] * mi_mult * CONFIG['APPLE_MULT']) * int(sig_pos in comida)
+    pts += CONFIG['X_BONUS'] * int(sig_pos in pickups)
     
     return pts, posible_kill
 
@@ -229,7 +233,7 @@ def evaluar_manzanas(sig_pos, obj, d_manz, d_en_com, cx, cy, esp):
     return pts
 
 def evaluar_movimiento(sig_pos, cab_ia, kwargs_eval):
-    an, al, obs_tot, zonas, e_seg, cola, cab_en, cuerp_en, comida, esp_bef, mi_pts, riv_pts, cx, cy, d_en_manz, f_dist = kwargs_eval
+    an, al, obs_tot, zonas, e_seg, cola, cab_en, cuerp_en, comida, esp_bef, mi_pts, riv_pts, cx, cy, d_en_manz, f_dist, pickups, mi_mult = kwargs_eval
     
     area_total = an * al
     
@@ -243,19 +247,19 @@ def evaluar_movimiento(sig_pos, cab_ia, kwargs_eval):
     pts += area * 8 if area >= e_seg else -4000
 
     est_len = max(3, len(cuerp_en) // max(1, len(cab_en)))
-    p_ofensiva, posible_kill = evaluar_ofensiva(esp_bef, obs_sim, zonas, an, al, est_len, sig_pos, comida)
+    p_ofensiva, posible_kill = evaluar_ofensiva(esp_bef, obs_sim, zonas, an, al, est_len, sig_pos, comida, pickups, mi_mult)
     pts += p_ofensiva
 
     pts += evaluar_tortuga(sig_pos, zonas, comida, area, mi_pts, riv_pts, f_dist(sig_pos), posible_kill)
 
-    mejor_d, mejor_obj = min(((astar_distancia(sig_pos, m, obs_tot, an, al), m) for m in comida), default=(9999, None))
+    mejor_d, mejor_obj = min(((astar_distancia(sig_pos, m, obs_tot, an, al), m) for m in comida + pickups), default=(9999, None))
     d_en_comida = d_en_manz.get(mejor_obj, 9999) if mejor_obj else 9999
     pts += evaluar_manzanas(sig_pos, mejor_obj, mejor_d, d_en_comida, cx, cy, espacio)
     
     return pts
 
-def mapear_distancias(comida, cabezas, obs, an, al):
-    return {m: min((astar_distancia(c, m, obs, an, al) for c in cabezas), default=9999) for m in comida}
+def mapear_distancias(comida_y_pickups, cabezas, obs, an, al):
+    return {m: min((astar_distancia(c, m, obs, an, al) for c in cabezas), default=9999) for m in comida_y_pickups}
 
 def mapear_espacios(cabezas, obs, zonas, an, al):
     return {c: calcular_espacio_libre(c, obs, zonas, an, al, an * al) for c in cabezas}
@@ -263,9 +267,9 @@ def mapear_espacios(cabezas, obs, zonas, an, al):
 def f_dist_factory(cab_en):
     return lambda pos: min((abs(pos[0]-cx) + abs(pos[1]-cy) for cx, cy in cab_en), default=9999)
 
-def obtener_movimiento_ia(board_string, mi_lado, mi_puntaje=0, rival_puntaje=0, game_id=None):
+def obtener_movimiento_ia(board_string, mi_lado, mi_puntaje=0, rival_puntaje=0, mi_mult=1, game_id=None):
     filas = board_string.strip('\n').split('\n')
-    cab, cuerpo, cab_en, cuerp_en, comida, paredes = analizar_tablero(filas, mi_lado)
+    cab, cuerpo, cab_en, cuerp_en, comida, paredes, pickups = analizar_tablero(filas, mi_lado)
     
     if not cab: return "UP"
     ancho, alto = len(filas[0]), len(filas)
@@ -276,7 +280,8 @@ def obtener_movimiento_ia(board_string, mi_lado, mi_puntaje=0, rival_puntaje=0, 
         ancho, alto, obs, zonas, len(cuerpo) + 3, encontrar_cola(cuerpo, cab), 
         cab_en, cuerp_en, comida, mapear_espacios(cab_en, obs, zonas, ancho, alto), 
         mi_puntaje, rival_puntaje, ancho//2, alto//2, 
-        mapear_distancias(comida, cab_en, obs, ancho, alto), f_dist_factory(cab_en)
+        mapear_distancias(comida + pickups, cab_en, obs, ancho, alto), f_dist_factory(cab_en),
+        pickups, mi_mult
     )
 
     def get_pts(mov):
@@ -306,14 +311,21 @@ async def handle_your_turn(websocket, data): # pragma: no cover
     
     jugador_1, puntaje_1 = data.get("player_1", "Jugador 1"), data.get("score_1", 0)
     jugador_2, puntaje_2 = data.get("player_2", "Jugador 2"), data.get("score_2", 0)
-    marcador = f"{jugador_1}: {puntaje_1} pts  |  {jugador_2}: {puntaje_2} pts"
+    
+    m1 = data.get("multiplier_1", 1)
+    m2 = data.get("multiplier_2", 1)
+    mi_mult = m1 if side == 'A' else m2
+    riv_mult = m2 if side == 'A' else m1
+
+    marcador = f"{jugador_1}: {puntaje_1} pts (x{m1}) | {jugador_2}: {puntaje_2} pts (x{m2})"
 
     with games_lock:
         if game_id in active_games and active_games[game_id].get("game_over"): return 
         active_games[game_id] = {"tablero": board_string, "marcador": marcador, "side": side, "game_over": False}
     
     mi_pts, riv_pts = (puntaje_1, puntaje_2) if side == 'A' else (puntaje_2, puntaje_1)
-    mov = obtener_movimiento_ia(board_string, side, mi_pts, riv_pts, game_id)
+    
+    mov = obtener_movimiento_ia(board_string, side, mi_pts, riv_pts, mi_mult, game_id)
     await send(websocket, "move", {"game_id": game_id, "turn_token": turn_token, "direction": mov})
 
 def handle_game_over(data): # pragma: no cover
