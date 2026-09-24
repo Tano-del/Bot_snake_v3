@@ -302,31 +302,32 @@ async def send(websocket, action, data): # pragma: no cover
 async def handle_challenge(websocket, data): # pragma: no cover
     challenge_id = data.get("challenge_id")
     await send(websocket, "accept_challenge", {"challenge_id": challenge_id})
+    
+def extraer_estado_jugador(data, side):
+    p1, pts1 = data.get("player_1", "Jugador 1"), data.get("score_1", 0)
+    p2, pts2 = data.get("player_2", "Jugador 2"), data.get("score_2", 0)
+    m1, m2 = data.get("multiplier_1", 1), data.get("multiplier_2", 1)
+    
+    marcador = f"{p1}: {pts1} pts (x{m1}) | {p2}: {pts2} pts (x{m2})"
+    
+    if side == 'A':
+        return pts1, pts2, m1, marcador
+    return pts2, pts1, m2, marcador
 
 async def handle_your_turn(websocket, data): # pragma: no cover
     game_id = data.get("game_id")
-    turn_token = data.get("turn_token")
+    side = data.get("side")
     board_string = data.get("board")
-    side = data.get("side") 
     
-    jugador_1, puntaje_1 = data.get("player_1", "Jugador 1"), data.get("score_1", 0)
-    jugador_2, puntaje_2 = data.get("player_2", "Jugador 2"), data.get("score_2", 0)
-    
-    m1 = data.get("multiplier_1", 1)
-    m2 = data.get("multiplier_2", 1)
-    mi_mult = m1 if side == 'A' else m2
-    riv_mult = m2 if side == 'A' else m1
-
-    marcador = f"{jugador_1}: {puntaje_1} pts (x{m1}) | {jugador_2}: {puntaje_2} pts (x{m2})"
+    mi_pts, riv_pts, mi_mult, marcador = extraer_estado_jugador(data, side)
 
     with games_lock:
-        if game_id in active_games and active_games[game_id].get("game_over"): return 
+        if active_games.get(game_id, {}).get("game_over", False): 
+            return 
         active_games[game_id] = {"tablero": board_string, "marcador": marcador, "side": side, "game_over": False}
     
-    mi_pts, riv_pts = (puntaje_1, puntaje_2) if side == 'A' else (puntaje_2, puntaje_1)
-    
     mov = obtener_movimiento_ia(board_string, side, mi_pts, riv_pts, mi_mult, game_id)
-    await send(websocket, "move", {"game_id": game_id, "turn_token": turn_token, "direction": mov})
+    await send(websocket, "move", {"game_id": game_id, "turn_token": data.get("turn_token"), "direction": mov})
 
 def handle_game_over(data): # pragma: no cover
     game_id = data.get("game_id")
