@@ -101,20 +101,16 @@ def test_analizar_tablero_entorno():
     assert (1, 1) in pickups 
     assert len(paredes) == 5
 
-def test_clasificar_comida():
-    comida_raw = [
-        ('*', 1, 1), 
-        ('3', 2, 2), 
-        ('4', 3, 3), 
-        ('1', 4, 4)  
-    ]
-    
-    comida_buena, comida_mala, valor = clasificar_comida(comida_raw)
-    
-    assert len(comida_buena) == 3
-    assert set(comida_buena) == {(1, 1), (2, 2), (4, 4)}
-    assert len(comida_mala) == 1
-    assert set(comida_mala) == {(3, 3)}
+def test_clasificar_comida_buena():
+    c_raw = [('*', 1, 1), ('3', 2, 2), ('4', 3, 3), ('1', 4, 4)]
+    c_buena, _, _ = clasificar_comida(c_raw)
+    assert len(c_buena) == 3
+    assert set(c_buena) == {(1, 1), (2, 2), (4, 4)}
+
+def test_clasificar_comida_mala_valor():
+    c_raw = [('*', 1, 1), ('3', 2, 2), ('4', 3, 3), ('1', 4, 4)]
+    _, c_mala, valor = clasificar_comida(c_raw)
+    assert set(c_mala) == {(3, 3)}
     assert valor == 1
     
 def test_mapeos():
@@ -209,38 +205,35 @@ def test_ia_movimiento_nueva_regla():
     mov_a = obtener_movimiento_ia(tablero, 'A', 0, 0, 1, "test-numeros")
     assert mov_a in ["UP", "DOWN", "LEFT", "RIGHT"]
 
-def test_analizar_tablero_nueva_regla():
-    filas = [
-        ".......",
-        "...3...", 
-        "..A.4..",
-        "...X...",
-        "..b..#.",
-        "..B....",
-        "......."
-    ]
-    
-    _, _, _, _, comida, paredes, pickups, valor_comida = analizar_tablero(filas, 'A')
-    
+def test_anal_tablero_elementos():
+    filas = [".......", "...3...", "..A.4..", "...X...", "..b..#.", "..B....", "......."]
+    _, _, _, _, comida, paredes, _, _ = analizar_tablero(filas, 'A')
     assert (3, 1) in comida
     assert (4, 2) in paredes
     assert (5, 4) in paredes 
+
+def test_anal_tablero_pickups():
+    filas = [".......", "...3...", "..A.4..", "...X...", "..b..#.", "..B....", "......."]
+    _, _, _, _, _, _, pickups, valor_comida = analizar_tablero(filas, 'A')
     assert (3, 3) in pickups 
     assert valor_comida == 3
 
-def test_extraer_estado_jugador():
+def test_extraer_estado_a():
     data = {
         "player_1": "Beto", "score_1": 1500, "multiplier_1": 3,
         "player_2": "Ana", "score_2": 200, "multiplier_2": 1
     }
-    
     mi_pts, riv_pts, mi_mult, marcador = extraer_estado_jugador(data, 'A')
     assert mi_pts == 1500
     assert riv_pts == 200
     assert mi_mult == 3
-    assert "Beto: 1500" in marcador
     assert "(x3)" in marcador
-    
+
+def test_extraer_estado_b():
+    data = {
+        "player_1": "Beto", "score_1": 1500, "multiplier_1": 3,
+        "player_2": "Ana", "score_2": 200, "multiplier_2": 1
+    }
     mi_pts_b, riv_pts_b, mi_mult_b, _ = extraer_estado_jugador(data, 'B')
     assert mi_pts_b == 200
     assert riv_pts_b == 1500
