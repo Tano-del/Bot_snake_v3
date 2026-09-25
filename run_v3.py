@@ -116,12 +116,14 @@ def clasificar_comida(comida_raw):
         else: nums[int(c)] = (x, y)
         
     c_buena, c_mala = [], set()
+    valor_comida = 1 
     for d, pos in nums.items():
         if ((d - 2) % 9 + 1) in nums:
             c_mala.add(pos)
         else:
             c_buena.append(pos)
-    return asteriscos + c_buena, c_mala
+            valor_comida = d 
+    return asteriscos + c_buena, c_mala, valor_comida
 
 def escanear_tablero(filas, dic_acciones):
     for y, fila in enumerate(filas):
@@ -154,11 +156,11 @@ def analizar_tablero(filas, mi_lado):
 
     escanear_tablero(filas, dic_acciones)
     
-    comida, comida_mala = clasificar_comida(comida_raw)
+    comida, comida_mala, valor_comida = clasificar_comida(comida_raw)
     paredes.update(comida_mala)
 
     cab_res = cabeza[0] if cabeza else None
-    return cab_res, cuerpo, cab_en, cuerp_en, comida, paredes, pickups
+    return cab_res, cuerpo, cab_en, cuerp_en, comida, paredes, pickups, valor_comida
 
 def calcular_peligros(cab_en, ancho, alto):
     zonas = set()
@@ -194,7 +196,7 @@ def evaluar_defensa(sig_pos, zonas, esp, esp_seguro, cola, obs, an, al):
     if cola and not hay_camino_a_objetivo(sig_pos, cola, obs, an, al): pts -= 8000
     return pts
 
-def evaluar_ofensiva(esp_before, obs_sim, zonas, an, al, est_len, sig_pos, comida, pickups, mi_mult):
+def evaluar_ofensiva(esp_before, obs_sim, zonas, an, al, est_len, sig_pos, comida, pickups, mi_mult, valor_comida):
     pts, esp_red, posible_kill = 0, 0, False
     for cab, antes in esp_before.items():
         despues = calcular_espacio_libre(cab, obs_sim, zonas, an, al, an * al)
@@ -203,7 +205,7 @@ def evaluar_ofensiva(esp_before, obs_sim, zonas, an, al, est_len, sig_pos, comid
 
     pts += esp_red * CONFIG['SPACE_KILL_FACTOR']
     pts += (CONFIG['KILL_VALUE'] * CONFIG['KILL_MULT'] + 300) * int(posible_kill)
-    pts += (CONFIG['APPLE_VALUE'] * mi_mult * CONFIG['APPLE_MULT']) * int(sig_pos in comida)
+    pts += (valor_comida * 100 * mi_mult * CONFIG['APPLE_MULT']) * int(sig_pos in comida)
     pts += CONFIG['X_BONUS'] * int(sig_pos in pickups)
     
     return pts, posible_kill
@@ -233,7 +235,7 @@ def evaluar_manzanas(sig_pos, obj, d_manz, d_en_com, cx, cy, esp):
     return pts
 
 def evaluar_movimiento(sig_pos, cab_ia, kwargs_eval):
-    an, al, obs_tot, zonas, e_seg, cola, cab_en, cuerp_en, comida, esp_bef, mi_pts, riv_pts, cx, cy, d_en_manz, f_dist, pickups, mi_mult = kwargs_eval
+    an, al, obs_tot, zonas, e_seg, cola, cab_en, cuerp_en, comida, esp_bef, mi_pts, riv_pts, cx, cy, d_en_manz, f_dist, pickups, mi_mult, valor_comida = kwargs_eval
     
     area_total = an * al
     
@@ -247,7 +249,7 @@ def evaluar_movimiento(sig_pos, cab_ia, kwargs_eval):
     pts += area * 8 if area >= e_seg else -4000
 
     est_len = max(3, len(cuerp_en) // max(1, len(cab_en)))
-    p_ofensiva, posible_kill = evaluar_ofensiva(esp_bef, obs_sim, zonas, an, al, est_len, sig_pos, comida, pickups, mi_mult)
+    p_ofensiva, posible_kill = evaluar_ofensiva(esp_bef, obs_sim, zonas, an, al, est_len, sig_pos, comida, pickups, mi_mult, valor_comida)
     pts += p_ofensiva
 
     pts += evaluar_tortuga(sig_pos, zonas, comida, area, mi_pts, riv_pts, f_dist(sig_pos), posible_kill)
@@ -269,19 +271,21 @@ def f_dist_factory(cab_en):
 
 def obtener_movimiento_ia(board_string, mi_lado, mi_puntaje=0, rival_puntaje=0, mi_mult=1, game_id=None):
     filas = board_string.strip('\n').split('\n')
-    cab, cuerpo, cab_en, cuerp_en, comida, paredes, pickups = analizar_tablero(filas, mi_lado)
+    cab, cuerpo, cab_en, cuerp_en, comida, paredes, pickups, valor_comida = analizar_tablero(filas, mi_lado)
     
     if not cab: return "UP"
     ancho, alto = len(filas[0]), len(filas)
     obs = set(cuerpo) | cuerp_en | paredes
     zonas = calcular_peligros(cab_en, ancho, alto)
     
+    objetivos = comida + (pickups if mi_mult < 4 else [])
+    
     kwargs = (
         ancho, alto, obs, zonas, len(cuerpo) + 3, encontrar_cola(cuerpo, cab), 
         cab_en, cuerp_en, comida, mapear_espacios(cab_en, obs, zonas, ancho, alto), 
         mi_puntaje, rival_puntaje, ancho//2, alto//2, 
-        mapear_distancias(comida + pickups, cab_en, obs, ancho, alto), f_dist_factory(cab_en),
-        pickups, mi_mult
+        mapear_distancias(objetivos, cab_en, obs, ancho, alto), f_dist_factory(cab_en),
+        pickups, mi_mult, valor_comida
     )
 
     def get_pts(mov):
