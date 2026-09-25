@@ -13,7 +13,8 @@ from run_v3 import (
     mapear_distancias,
     mapear_espacios,
     obtener_movimiento_ia,
-    clasificar_comida
+    clasificar_comida,
+    extraer_estado_jugador
 )
 
 def test_calidad_codigo_xenon():
@@ -81,25 +82,41 @@ def test_calcular_peligros(cabezas_enemigas, filas, columnas, peligros_esperados
 
 def test_analizar_tablero_jugador():
     tablero = ["|A|", "-X-", "bB#"]
-    cab, cuerpo, _, _, _, _, _ = analizar_tablero(tablero, 'A')
+    cab, cuerpo, _, _, _, _, _, _ = analizar_tablero(tablero, 'A')
     
     assert cab == (1, 0)
     assert cuerpo == []
 
 def test_analizar_tablero_enemigo():
     tablero = ["|A|", "-*-", "bB."]
-    _, _, cab_en, cuerp_en, _, _, _ = analizar_tablero(tablero, 'A')
+    _, _, cab_en, cuerp_en, _, _, _, _ = analizar_tablero(tablero, 'A')
     
     assert cab_en == [(1, 2)]
     assert cuerp_en == {(0, 2), (1, 2)}
 
 def test_analizar_tablero_entorno():
     tablero = ["|A|", "-X-", "bB#"]
-    _, _, _, _, _, paredes, pickups = analizar_tablero(tablero, 'A')
+    _, _, _, _, _, paredes, pickups, valor_comida = analizar_tablero(tablero, 'A')
     
-    assert (1, 1) in pickups # La X es un pickup
-    assert len(paredes) == 5 # 4 palos + 1 muro (#)
+    assert (1, 1) in pickups 
+    assert len(paredes) == 5
 
+def test_clasificar_comida():
+    comida_raw = [
+        ('*', 1, 1), 
+        ('3', 2, 2), 
+        ('4', 3, 3), 
+        ('1', 4, 4)  
+    ]
+    
+    comida_buena, comida_mala, valor = clasificar_comida(comida_raw)
+    
+    assert len(comida_buena) == 3
+    assert set(comida_buena) == {(1, 1), (2, 2), (4, 4)}
+    assert len(comida_mala) == 1
+    assert set(comida_mala) == {(3, 3)}
+    assert valor == 3
+    
 def test_mapeos():
     comida = [(0, 0)]
     cab_en = [(2, 2)]
@@ -178,22 +195,6 @@ def test_ia_evitar_peligro():
     mov = obtener_movimiento_ia(tablero, 'A', 0, 0, 1, "test-6")
     assert mov in ["UP", "LEFT", "RIGHT"]
 
-def test_clasificar_comida():
-    comida_raw = [
-        ('*', 1, 1), 
-        ('3', 2, 2), 
-        ('4', 3, 3), 
-        ('1', 4, 4)  
-    ]
-    
-    comida_buena, comida_mala = clasificar_comida(comida_raw)
-    
-    assert len(comida_buena) == 3
-    assert set(comida_buena) == {(1, 1), (2, 2), (4, 4)}
-    
-    assert len(comida_mala) == 1
-    assert set(comida_mala) == {(3, 3)}
-
 def test_ia_movimiento_nueva_regla():
     tablero = "\n".join([
         ".......",
@@ -219,9 +220,28 @@ def test_analizar_tablero_nueva_regla():
         "......."
     ]
     
-    _, _, _, _, comida, paredes, pickups = analizar_tablero(filas, 'A')
+    _, _, _, _, comida, paredes, pickups, valor_comida = analizar_tablero(filas, 'A')
     
     assert (3, 1) in comida
     assert (4, 2) in paredes
     assert (5, 4) in paredes 
     assert (3, 3) in pickups 
+    assert valor_comida == 3
+
+def test_extraer_estado_jugador():
+    data = {
+        "player_1": "Beto", "score_1": 1500, "multiplier_1": 3,
+        "player_2": "Ana", "score_2": 200, "multiplier_2": 1
+    }
+    
+    mi_pts, riv_pts, mi_mult, marcador = extraer_estado_jugador(data, 'A')
+    assert mi_pts == 1500
+    assert riv_pts == 200
+    assert mi_mult == 3
+    assert "Beto: 1500" in marcador
+    assert "(x3)" in marcador
+    
+    mi_pts_b, riv_pts_b, mi_mult_b, _ = extraer_estado_jugador(data, 'B')
+    assert mi_pts_b == 200
+    assert riv_pts_b == 1500
+    assert mi_mult_b == 1
