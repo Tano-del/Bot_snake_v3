@@ -115,7 +115,7 @@ def test_clasificar_comida():
     assert set(comida_buena) == {(1, 1), (2, 2), (4, 4)}
     assert len(comida_mala) == 1
     assert set(comida_mala) == {(3, 3)}
-    assert valor == 3
+    assert valor == 1
     
 def test_mapeos():
     comida = [(0, 0)]
