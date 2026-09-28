@@ -33,13 +33,4 @@ pip install websockets==12.0
 python run_v3.py <TU_TOKEN>
 
 
-**2. Ejecutar simulaciones locales:**
 
-# Ejecutar 100 partidas de prueba a nivel local
-python simulator.py 100
-
-
-**3. Optimizar hiperparámetros (Torneo):**
-
-# Enfrentar variantes (ej: 20 partidas por variante, guardando el top 10)
-python tournament.py 20 10
