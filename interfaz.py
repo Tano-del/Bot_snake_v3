@@ -20,7 +20,9 @@ def iniciar_interfaz_multitab(get_games_func):
         imagenes = {
             "pasto": tk.PhotoImage(file="imagenes/pasto.png"),
             "muro": tk.PhotoImage(file="imagenes/muro.png"),
+            "muro_dinamico": tk.PhotoImage(file="imagenes/muro_dinamico.png"),
             "manzana": tk.PhotoImage(file="imagenes/manzana.png"),
+            "multiplicador": tk.PhotoImage(file="imagenes/multiplicador.png"),
             "mi_cabeza": tk.PhotoImage(file="imagenes/mi_cabeza.png"),
             "mi_cuerpo": tk.PhotoImage(file="imagenes/mi_cuerpo.png"),
             "su_cabeza": tk.PhotoImage(file="imagenes/su_cabeza.png"),
@@ -87,8 +89,14 @@ def iniciar_interfaz_multitab(get_games_func):
                     
                     if char in ['|', '-']:
                         canvas.create_image(pos_x, pos_y, image=imagenes["muro"], anchor="nw")
-                    elif char == '*' or char.isdigit():
+                    elif char == '#':
+                        canvas.create_image(pos_x, pos_y, image=imagenes["muro_dinamico"], anchor="nw")
+                    elif char == '*':
                         canvas.create_image(pos_x, pos_y, image=imagenes["manzana"], anchor="nw")
+                    elif char == 'X':
+                        canvas.create_image(pos_x, pos_y, image=imagenes["multiplicador"], anchor="nw")
+                    elif char.isdigit():
+                        canvas.create_text(pos_x + 10, pos_y + 10, text=char, fill="white", font=("Courier", 12, "bold"))
                     elif char == char_mi_cabeza:
                         canvas.create_image(pos_x, pos_y, image=imagenes["mi_cabeza"], anchor="nw")
                     elif char == char_mi_cuerpo:
