@@ -15,8 +15,6 @@ El comportamiento del bot se define en `run_v3.py` mediante parámetros configur
 
 * `run_v3.py`: Cliente asíncrono principal (WebSockets) y cerebro de la IA.
 * `interfaz.py`: Monitor gráfico multi-pestaña construido con `tkinter` para ver las partidas en tiempo real.
-* `simulator.py`: Simulador local para testear el rendimiento del bot sin conexión.
-* `tournament.py`: Herramienta de Grid Search para optimizar los hiperparámetros de la IA enfrentando distintas variantes.
 
 ## Instalación
 
