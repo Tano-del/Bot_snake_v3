@@ -10,7 +10,6 @@ from run_v3 import (
     analizar_tablero,
     calcular_peligros,
     es_pasillo,
-    mapear_distancias,
     mapear_espacios,
     obtener_movimiento_ia,
     clasificar_comida,
