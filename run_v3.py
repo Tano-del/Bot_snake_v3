@@ -185,15 +185,19 @@ def evaluar_pasillo_borde(nx, ny, ancho, alto, obs_sim, cab_en, sig_pos, f_dist)
         return 0
     
     dist_cabeza = f_dist(sig_pos)
-    pts_pasillo = -60000 * int(dist_cabeza <= 8 and es_pasillo(nx, ny, ancho, alto, obs_sim))
-    pts_borde = -15000 * int(dist_cabeza <= 4 and es_borde(nx, ny, ancho, alto))
+    pts_pasillo = -80000 if es_pasillo(nx, ny, ancho, alto, obs_sim) else 0
+    pts_borde = -25000 * int(dist_cabeza <= 6 and es_borde(nx, ny, ancho, alto))
     
     return pts_pasillo + pts_borde
 
 def evaluar_defensa(sig_pos, zonas, esp, esp_seguro, cola, obs, an, al):
     pts = -1400 if sig_pos in zonas else 0
     pts += esp * 8 if esp >= esp_seguro else -3200
-    if cola and not hay_camino_a_objetivo(sig_pos, cola, obs, an, al): pts -= 8000
+    if cola:
+        if not hay_camino_a_objetivo(sig_pos, cola, obs, an, al):
+            pts -= 15000
+        if cola in zonas:
+            pts -= 5000
     return pts
 
 def evaluar_ofensiva(esp_before, obs_sim, zonas, an, al, est_len, sig_pos, comida, pickups, mi_mult, valor_comida):
@@ -210,7 +214,7 @@ def evaluar_ofensiva(esp_before, obs_sim, zonas, an, al, est_len, sig_pos, comid
     
     return pts, posible_kill
 
-def evaluar_tortuga(sig_pos, zonas, comida, area, mi_pts, riv_pts, dist_en, p_kill):
+def evaluar_tortuga(sig_pos, zonas, comida, area, mi_pts, riv_pts, dist_en, p_kill, est_len=0, len_rival=0):
     pts = 0
     if mi_pts - riv_pts >= CONFIG['TURTLE_THRESHOLD']:
         pts -= 700 * int(sig_pos in zonas)
@@ -220,7 +224,10 @@ def evaluar_tortuga(sig_pos, zonas, comida, area, mi_pts, riv_pts, dist_en, p_ki
     if dist_en == 0:
         return pts - 6000
     
-    pts_dist = -1200 if (dist_en == 1 and not p_kill) else (dist_en * 5)
+    if dist_en <= 3 and est_len and len_rival and est_len <= len_rival + 1:
+        pts -= (4 - dist_en) * 2400
+    
+    pts_dist = -1200 if (dist_en == 1 and not p_kill) else (dist_en * 8)
     return pts + pts_dist
 
 def evaluar_manzanas(sig_pos, obj, d_manz, d_en_com, cx, cy, esp):
@@ -252,7 +259,7 @@ def evaluar_movimiento(sig_pos, cab_ia, kwargs_eval):
     p_ofensiva, posible_kill = evaluar_ofensiva(esp_bef, obs_sim, zonas, an, al, est_len, sig_pos, comida, pickups, mi_mult, valor_comida)
     pts += p_ofensiva
 
-    pts += evaluar_tortuga(sig_pos, zonas, comida, area, mi_pts, riv_pts, f_dist(sig_pos), posible_kill)
+    pts += evaluar_tortuga(sig_pos, zonas, comida, area, mi_pts, riv_pts, f_dist(sig_pos), posible_kill, est_len, max(3, len(cuerp_en)))
 
     mejor_d, mejor_obj = min(((astar_distancia(sig_pos, m, obs_tot, an, al), m) for m in comida + pickups), default=(9999, None))
     d_en_comida = d_en_manz.get(mejor_obj, 9999) if mejor_obj else 9999
