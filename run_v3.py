@@ -16,12 +16,19 @@ def get_all_games():
         return {game_id: data.copy() for game_id, data in active_games.items()}
 
 CONFIG = {
-    'APPLE_VALUE': 100, 'KILL_VALUE': 1000, 'TURN_POINT': 1,
-    'APPLE_MULT': 25, 'KILL_MULT': 15, 'SPACE_KILL_FACTOR': 30,
-    'TURTLE_THRESHOLD': 1000,
+    'APPLE_VALUE': 100,
+    'KILL_VALUE': 1000,
+    'TURN_POINT': 1,
+    'APPLE_MULT': 25,
+    'KILL_MULT': 15,
+    'SPACE_KILL_FACTOR': 30,
+    'TURTLE_THRESHOLD': 1500,
     'X_BONUS': 4000,
-    'X_URGENCY': 1500,  # Bonus si mi_mult < 3
-    'AGGRESSIVE_THRESHOLD': 1500,  # Umbral para ser ofensivo
+    'DANGER_ZONE': 200000,
+    'ESCAPE_PENALTY': 100000,
+    'PASILLO_PENALTY': 120000,
+    'BORDE_PENALTY': 50000,
+    'COLA_TRAPPED': 30000,
 }
 
 
@@ -127,6 +134,26 @@ def clasificar_comida(comida_raw):
             valor_comida = d 
     return asteriscos + c_buena, c_mala, valor_comida
 
+def encontrar_siguiente_digito(comida_raw):
+    """Encuentra el siguiente dígito a comer según la secuencia 1-9."""
+    nums = {}
+    for c, x, y in comida_raw:
+        if c != '*':
+            nums[int(c)] = (x, y)
+    
+    if not nums:
+        return None
+    
+    if len(nums) == 1:
+        return list(nums.values())[0]
+    
+    for d in range(1, 10):
+        pred = d - 1 if d > 1 else 9
+        if pred not in nums and d in nums:
+            return nums[d]
+    
+    return None
+
 def escanear_tablero(filas, dic_acciones):
     for y, fila in enumerate(filas):
         for x, char in enumerate(fila):
@@ -162,7 +189,7 @@ def analizar_tablero(filas, mi_lado):
     paredes.update(comida_mala)
 
     cab_res = cabeza[0] if cabeza else None
-    return cab_res, cuerpo, cab_en, cuerp_en, comida, paredes, pickups, valor_comida
+    return cab_res, cuerpo, cab_en, cuerp_en, comida, paredes, pickups, valor_comida, comida_raw
 
 def calcular_peligros(cab_en, ancho, alto):
     zonas = set()
@@ -182,146 +209,93 @@ def es_pasillo(nx, ny, ancho, alto, obs_sim):
 def es_borde(nx, ny, ancho, alto):
     return nx in (0, ancho - 1) or ny in (0, alto - 1)
 
-def evaluar_pasillo_borde(nx, ny, ancho, alto, obs_sim, cab_en, sig_pos, f_dist):
-    if not cab_en: 
+def hay_escape(sig_pos, obs_sim, zonas, an, al, min_espacio=8):
+    esp = calcular_espacio_libre(sig_pos, obs_sim, zonas, an, al, an * al)
+    return esp >= min_espacio
+
+def score_neto_por_movimiento(sig_pos, objetivo, d_obj, mi_pts, riv_pts, mi_mult, valor_obj, es_x=False):
+    if objetivo is None:
         return 0
     
-    dist_cabeza = f_dist(sig_pos)
-    pts_pasillo = -90000 if es_pasillo(nx, ny, ancho, alto, obs_sim) else 0
-    pts_borde = -30000 * int(dist_cabeza <= 5 and es_borde(nx, ny, ancho, alto))
+    if es_x:
+        score_futuro = 50 * (mi_mult + 1) - (50 * mi_mult)
+        return max(0, score_futuro * 10 - d_obj * 2)
     
-    return pts_pasillo + pts_borde
-
-def evaluar_defensa(sig_pos, zonas, esp, esp_seguro, cola, obs, an, al, riv_molt=False):
-    pts = -1800 if sig_pos in zonas else 0
-    pts += esp * 10 if esp >= esp_seguro else -4500
-    if cola:
-        if not hay_camino_a_objetivo(sig_pos, cola, obs, an, al):
-            pts -= 20000
-        if cola in zonas:
-            pts -= 8000
-    if riv_molt:
-        pts -= 1000
-    return pts
-
-def evaluar_ofensiva(esp_before, obs_sim, zonas, an, al, est_len, sig_pos, comida, pickups, mi_mult, valor_comida, mi_pts, riv_pts):
-    pts, esp_red, posible_kill = 0, 0, False
-    for cab, antes in esp_before.items():
-        despues = calcular_espacio_libre(cab, obs_sim, zonas, an, al, an * al)
-        esp_red += max(0, antes - despues)
-        posible_kill = posible_kill or (despues < est_len + 2)
-
-    pts += esp_red * CONFIG['SPACE_KILL_FACTOR']
-    pts += (CONFIG['KILL_VALUE'] * CONFIG['KILL_MULT'] + 300) * int(posible_kill)
-    pts += (valor_comida * 100 * mi_mult * CONFIG['APPLE_MULT']) * int(sig_pos in comida)
-    pts += CONFIG['X_BONUS'] * int(sig_pos in pickups)
-    
-    if mi_pts - riv_pts > CONFIG['AGGRESSIVE_THRESHOLD'] and esp_red > 5:
-        pts += 3000
-    
-    return pts, posible_kill
-
-def evaluar_tortuga(sig_pos, zonas, comida, area, mi_pts, riv_pts, dist_en, p_kill, est_len=0, len_rival=0):
-    pts = 0
-    if mi_pts - riv_pts >= CONFIG['TURTLE_THRESHOLD']:
-        pts -= 700 * int(sig_pos in zonas)
-        pts -= (CONFIG['APPLE_VALUE'] * 2) * int(sig_pos in comida)
-        pts += area * 4
-
-    if dist_en == 0:
-        return pts - 7000
-    
-    if dist_en <= 3 and est_len and len_rival and est_len <= len_rival + 1:
-        pts -= (4 - dist_en) * 3000
-    
-    pts_dist = -1500 if (dist_en == 1 and not p_kill) else (dist_en * 10)
-    return pts + pts_dist
-
-def evaluar_comida_segura(sig_pos, obj, d_manz, d_en_com, cx, cy, esp, obs_tot, zonas, an, al):
-    """Evalúa si la comida es segura de alcanzar (no es trampa)."""
-    pts = 0
-    
-    if not obj or d_manz >= 9999:
-        return pts
-    
-    # CRÍTICO: Verificar que hay ruta de escape después de comer
-    esp_en_obj = calcular_espacio_libre(obj, obs_tot, zonas, an, al, an * al)
-    
-    # No perseguir comida en callejón sin salida
-    if esp_en_obj < 5:
-        return -5000
-    
-    # Lógica de scoring por distancia
-    if d_manz < d_en_com: 
-        pts += max(0, 4500 - d_manz * 70)
-    elif d_manz == d_en_com: 
-        pts += max(0, 2500 - d_manz * 40)
-    else: 
-        pts += max(0, 300 - (abs(sig_pos[0]-cx) + abs(sig_pos[1]-cy)) * 10) - 1200
-    
-    pts += max(0, 1500 - d_manz * 50)
-    
-    # Bonus por espacio disponible
-    pts += esp_en_obj // 3
-    
-    return pts
-
-def evaluar_x_prioritario(sig_pos, pickups, d_en_manz, f_dist, mi_mult, comida, d_manz_best):
-    """Prioriza X si multiplicador es bajo."""
-    if not pickups or mi_mult >= 3:
-        return 0
-    
-    mejor_x_dist = 9999
-    for px in pickups:
-        dx = astar_distancia(sig_pos, px, set(), 100, 100)  # Simple manhattan
-        if dx < mejor_x_dist:
-            mejor_x_dist = dx
-    
-    # Si X está cerca Y multiplicador bajo, ir por X
-    if mejor_x_dist < 5 and mi_mult < 3:
-        valor_futuro = 5 * 100 * (mi_mult + 1) - (5 * 100 * mi_mult)
-        return valor_futuro * 2 + (50 - mejor_x_dist * 5)
+    if valor_obj > 0:
+        score_futuro = valor_obj * 100 * mi_mult
+        score_neto = score_futuro - (d_obj * 5)
+        return max(0, score_neto)
     
     return 0
 
-def evaluar_movimiento(sig_pos, cab_ia, kwargs_eval):
-    an, al, obs_tot, zonas, e_seg, cola, cab_en, cuerp_en, comida, esp_bef, mi_pts, riv_pts, cx, cy, d_en_manz, f_dist, pickups, mi_mult, valor_comida = kwargs_eval
-    
+def evaluar_movimiento_mark3(sig_pos, cab_ia, kwargs_eval):
+    an, al, obs_tot, zonas, e_seg, cola, cab_en, cuerp_en, comida, esp_bef, mi_pts, riv_pts, cx, cy, f_dist, pickups, mi_mult, valor_comida, comida_raw = kwargs_eval
     area_total = an * al
     
     espacio = calcular_espacio_libre(sig_pos, obs_tot, zonas, an, al, area_total)
+    if espacio < 6:
+        return -CONFIG['ESCAPE_PENALTY']
     
-    # CRÍTICO: Detectar si rival es más fuerte
-    len_rival = max(3, len(cuerp_en) // max(1, len(cab_en)))
-    len_yo = len(cuerp_en) if not cuerp_en else len(cuerp_en)
-    riv_es_mas_fuerte = len_rival >= len_yo + 2
-    
-    pts = evaluar_defensa(sig_pos, zonas, espacio, e_seg, cola, obs_tot, an, al, riv_es_mas_fuerte)
-
     obs_sim = set(obs_tot) | {sig_pos}
-    pts += evaluar_pasillo_borde(sig_pos[0], sig_pos[1], an, al, obs_sim, cab_en, sig_pos, f_dist)
-
-    area = calcular_espacio_libre(sig_pos, obs_sim, zonas, an, al, area_total)
-    pts += area * 10 if area >= e_seg else -5000
-
-    est_len = max(3, len(cuerp_en) // max(1, len(cab_en)))
-    p_ofensiva, posible_kill = evaluar_ofensiva(esp_bef, obs_sim, zonas, an, al, est_len, sig_pos, comida, pickups, mi_mult, valor_comida, mi_pts, riv_pts)
-    pts += p_ofensiva
-
-    pts += evaluar_tortuga(sig_pos, zonas, comida, area, mi_pts, riv_pts, f_dist(sig_pos), posible_kill, est_len, len_rival)
-
-    # NUEVO: Evaluar comida CON seguridad
-    mejor_d, mejor_obj = min(((astar_distancia(sig_pos, m, obs_tot, an, al), m) for m in comida + pickups), default=(9999, None))
-    d_en_comida = d_en_manz.get(mejor_obj, 9999) if mejor_obj else 9999
-    pts += evaluar_comida_segura(sig_pos, mejor_obj, mejor_d, d_en_comida, cx, cy, espacio, obs_tot, zonas, an, al)
+    if es_pasillo(sig_pos[0], sig_pos[1], an, al, obs_sim):
+        return -CONFIG['PASILLO_PENALTY']
     
-    # NUEVO: Priorizar X si mi_mult < 3
-    pts += evaluar_x_prioritario(sig_pos, pickups, d_en_manz, f_dist, mi_mult, comida, mejor_d)
+    dist_rival = f_dist(sig_pos)
+    if dist_rival <= 4 and es_borde(sig_pos[0], sig_pos[1], an, al):
+        return -CONFIG['BORDE_PENALTY']
+    
+    if cola and not hay_camino_a_objetivo(sig_pos, cola, obs_tot, an, al):
+        return -CONFIG['COLA_TRAPPED']
+    
+    pts = 0
+    pts += espacio * 12
+    
+    if mi_pts - riv_pts > 500 and es_pasillo(sig_pos[0], sig_pos[1], an, al, obs_sim):
+        pts -= 50000
+    
+    len_yo = len(cuerp_en) if cuerp_en else 1
+    len_rival = max(3, len(cuerp_en) // max(1, len(cab_en)))
+    
+    if mi_pts - riv_pts < -500:
+        pts += espacio * 5
+        pts -= dist_rival * 2 if dist_rival > 0 else -2000
+    elif mi_pts - riv_pts > 1000:
+        area = calcular_espacio_libre(sig_pos, obs_sim, zonas, an, al, area_total)
+        for cab, antes in esp_bef.items():
+            despues = calcular_espacio_libre(cab, obs_sim, zonas, an, al, an * al)
+            esp_red = max(0, antes - despues)
+            if esp_red > 8:
+                pts += esp_red * CONFIG['SPACE_KILL_FACTOR']
+    
+    siguiente_digit = encontrar_siguiente_digito(comida_raw)
+    mejor_obj = siguiente_digit or None
+    mejor_score_neto = -9999
+    mejor_d = 9999
+    
+    for comida_pos in comida:
+        d = astar_distancia(sig_pos, comida_pos, obs_tot, an, al)
+        score_neto = score_neto_por_movimiento(sig_pos, comida_pos, d, mi_pts, riv_pts, mi_mult, valor_comida)
+        if score_neto > mejor_score_neto:
+            mejor_score_neto = score_neto
+            mejor_obj = comida_pos
+            mejor_d = d
+    
+    for pickup_pos in pickups:
+        d = astar_distancia(sig_pos, pickup_pos, obs_tot, an, al)
+        score_neto = score_neto_por_movimiento(sig_pos, pickup_pos, d, mi_pts, riv_pts, mi_mult, 0, es_x=True)
+        if score_neto > mejor_score_neto and mi_mult < 4:
+            mejor_score_neto = score_neto
+            mejor_obj = pickup_pos
+            mejor_d = d
+    
+    if mejor_obj:
+        esp_en_obj = calcular_espacio_libre(mejor_obj, obs_sim, zonas, an, al, an * al)
+        if esp_en_obj >= 8:
+            pts += max(0, 5000 - mejor_d * 50)
+        else:
+            pts -= 3000
     
     return pts
-
-def mapear_distancias(comida_y_pickups, cabezas, obs, an, al):
-    return {m: min((astar_distancia(c, m, obs, an, al) for c in cabezas), default=9999) for m in comida_y_pickups}
 
 def mapear_espacios(cabezas, obs, zonas, an, al):
     return {c: calcular_espacio_libre(c, obs, zonas, an, al, an * al) for c in cabezas}
@@ -331,27 +305,24 @@ def f_dist_factory(cab_en):
 
 def obtener_movimiento_ia(board_string, mi_lado, mi_puntaje=0, rival_puntaje=0, mi_mult=1, game_id=None):
     filas = board_string.strip('\n').split('\n')
-    cab, cuerpo, cab_en, cuerp_en, comida, paredes, pickups, valor_comida = analizar_tablero(filas, mi_lado)
+    cab, cuerpo, cab_en, cuerp_en, comida, paredes, pickups, valor_comida, comida_raw = analizar_tablero(filas, mi_lado)
     
     if not cab: return "UP"
     ancho, alto = len(filas[0]), len(filas)
     obs = set(cuerpo) | cuerp_en | paredes
     zonas = calcular_peligros(cab_en, ancho, alto)
     
-    objetivos = comida + (pickups if mi_mult < 4 else [])
-    
     kwargs = (
         ancho, alto, obs, zonas, len(cuerpo) + 3, encontrar_cola(cuerpo, cab), 
         cab_en, cuerp_en, comida, mapear_espacios(cab_en, obs, zonas, ancho, alto), 
-        mi_puntaje, rival_puntaje, ancho//2, alto//2, 
-        mapear_distancias(objetivos, cab_en, obs, ancho, alto), f_dist_factory(cab_en),
-        pickups, mi_mult, valor_comida
+        mi_puntaje, rival_puntaje, ancho//2, alto//2, f_dist_factory(cab_en),
+        pickups, mi_mult, valor_comida, comida_raw
     )
 
     def get_pts(mov):
         nx, ny = cab[0] + mov[0], cab[1] + mov[1]
         if 0 <= nx < ancho and 0 <= ny < alto and (nx, ny) not in obs:
-            return evaluar_movimiento((nx, ny), cab, kwargs)
+            return evaluar_movimiento_mark3((nx, ny), cab, kwargs)
         return -999999
 
     opciones = [(0, -1, "UP"), (0, 1, "DOWN"), (-1, 0, "LEFT"), (1, 0, "RIGHT")]
