@@ -7,7 +7,7 @@ def iniciar_interfaz_multitab(get_games_func):
     para monitorear múltiples partidas simultáneas y congelarlas al terminar.
     """
     ventana = tk.Tk()
-    ventana.title("Monitor de Partidas - IA A* - Bot Snake")
+    ventana.title("Monitor de Partidas - IA A* - Bot Snake V9")
     ventana.configure(bg="black")
     
     notebook = ttk.Notebook(ventana)
@@ -29,7 +29,7 @@ def iniciar_interfaz_multitab(get_games_func):
             "su_cuerpo": tk.PhotoImage(file="imagenes/su_cuerpo.png")
         }
     except Exception as e:
-        print(f"[!] Error al cargar imágenes: {e}. Asegurate de tener los .png en la carpeta.")
+        print(f"[!] Error al cargar imágenes: {e}. Asegurate de tener los .png.")
         return 
 
     def actualizar_tabs():
@@ -41,11 +41,7 @@ def iniciar_interfaz_multitab(get_games_func):
                 notebook.add(frame, text=f"Partida {game_id[:6]}...")
                 
                 etiqueta_marcador = tk.Label(
-                    frame, 
-                    text="", 
-                    font=("Courier", 11, "bold"), 
-                    fg="yellow", 
-                    bg="black"
+                    frame, text="", font=("Courier", 11, "bold"), fg="yellow", bg="black"
                 )
                 etiqueta_marcador.pack(pady=5)
                 
@@ -53,10 +49,7 @@ def iniciar_interfaz_multitab(get_games_func):
                 canvas.pack(padx=5, pady=5)
                 
                 pestanas[game_id] = {
-                    "frame": frame,
-                    "canvas": canvas,
-                    "label": etiqueta_marcador,
-                    "dibujado_final": False 
+                    "frame": frame, "canvas": canvas, "label": etiqueta_marcador, "dibujado_final": False 
                 }
             
             tab_info = pestanas[game_id]
@@ -97,6 +90,12 @@ def iniciar_interfaz_multitab(get_games_func):
                         canvas.create_image(pos_x, pos_y, image=imagenes["multiplicador"], anchor="nw")
                     elif char.isdigit():
                         canvas.create_text(pos_x + 10, pos_y + 10, text=char, fill="white", font=("Courier", 12, "bold"))
+                    elif char == '💣':
+                        canvas.create_oval(pos_x + 2, pos_y + 2, pos_x + 18, pos_y + 18, fill="red", outline="white")
+                    elif char == '🧨':
+                        canvas.create_oval(pos_x + 5, pos_y + 5, pos_x + 15, pos_y + 15, fill="orange", outline="yellow")
+                    elif char in ['\u24b6', '\u24b7']:
+                        canvas.create_text(pos_x + 10, pos_y + 10, text=char, fill="orange", font=("Courier", 12, "bold"))
                     elif char == char_mi_cabeza:
                         canvas.create_image(pos_x, pos_y, image=imagenes["mi_cabeza"], anchor="nw")
                     elif char == char_mi_cuerpo:
