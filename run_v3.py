@@ -2,7 +2,7 @@ import asyncio
 import websockets
 import json
 import sys
-from collections import deque
+from collections import deque, defaultdict
 import threading
 import heapq
 
@@ -21,7 +21,6 @@ CONFIG = {
     'TURTLE_THRESHOLD': 1000,
     'X_BONUS': 4000 
 }
-
 
 def es_vec_valido(nx, ny, ancho, alto, obs, pel, vis):
     if not (0 <= nx < ancho and 0 <= ny < alto): return False
@@ -110,20 +109,20 @@ def astar_distancia(start_pos, objetivo, obstaculos, ancho, alto):
     return 9999 
 
 def clasificar_comida(comida_raw):
-    asteriscos, nums = [], {}
+    nums = defaultdict(list)
     for c, x, y in comida_raw:
-        if c == '*': asteriscos.append((x, y))
-        else: nums[int(c)] = (x, y)
+        nums[int(c)].append((x, y))
         
     c_buena, c_mala = [], set()
     valor_comida = 1 
-    for d, pos in nums.items():
-        if ((d - 2) % 9 + 1) in nums:
-            c_mala.add(pos)
+    for d, posiciones in nums.items():
+        predecesor = (d - 2) % 9 + 1
+        if predecesor in nums:
+            c_mala.update(posiciones)
         else:
-            c_buena.append(pos)
+            c_buena.extend(posiciones)
             valor_comida = d 
-    return asteriscos + c_buena, c_mala, valor_comida
+    return c_buena, c_mala, valor_comida
 
 def escanear_tablero(filas, dic_acciones):
     for y, fila in enumerate(filas):
@@ -132,13 +131,15 @@ def escanear_tablero(filas, dic_acciones):
             if func: func(x, y)
 
 def analizar_tablero(filas, mi_lado):
-    cuerpo, cab_en, comida_raw = [], [], []
+    cuerpo, cab_en, comida_raw, comida_e = [], [], [], []
     cuerp_en, paredes = set(), set()
-    cabeza, pickups = [], []
+    cabeza, pickups, bombas = [], [], []
     
     mi_cuerpo = mi_lado.lower()
     enemigo = list({'A', 'B'} - {mi_lado})[0]
-    enemigo_cuerpo = enemigo.lower()
+    
+    mi_cola = '\u24b6' if mi_lado == 'A' else '\u24b7'
+    su_cola = '\u24b7' if mi_lado == 'A' else '\u24b6'
 
     dic_acciones = {
         mi_lado: lambda x, y: cabeza.append((x, y)),
@@ -148,50 +149,74 @@ def analizar_tablero(filas, mi_lado):
         '#': lambda x, y: paredes.add((x, y)), 
         'X': lambda x, y: pickups.append((x, y)), 
         enemigo: lambda x, y: (cab_en.append((x, y)), cuerp_en.add((x, y))),
-        enemigo_cuerpo: lambda x, y: cuerp_en.add((x, y))
+        enemigo.lower(): lambda x, y: cuerp_en.add((x, y)),
+        '💣': lambda x, y: bombas.append(('G', x, y)),
+        '🧨': lambda x, y: bombas.append(('P', x, y)),
+        su_cola: lambda x, y: comida_e.append((x, y)),
+        '*': lambda x, y: comida_e.append((x, y)),
+        mi_cola: lambda x, y: None 
     }
     
-    for char in "123456789*":
+    for char in "123456789":
         dic_acciones[char] = lambda x, y, c=char: comida_raw.append((c, x, y))
 
     escanear_tablero(filas, dic_acciones)
     
     comida, comida_mala, valor_comida = clasificar_comida(comida_raw)
     paredes.update(comida_mala)
+    comida.extend(comida_e)
 
     cab_res = cabeza[0] if cabeza else None
-    return cab_res, cuerpo, cab_en, cuerp_en, comida, paredes, pickups, valor_comida
+    return cab_res, cuerpo, cab_en, cuerp_en, comida, paredes, pickups, valor_comida, bombas
 
-def calcular_peligros(cab_en, ancho, alto):
-    zonas = set()
+
+def dentro_del_tablero(x, y, ancho, alto):
+    return 0 <= x < ancho and 0 <= y < alto
+
+def _peligros_enemigos(cab_en, ancho, alto, zonas):
     for cx, cy in cab_en:
         for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
-            if 0 <= cx + dx < ancho and 0 <= cy + dy < alto:
+            if dentro_del_tablero(cx + dx, cy + dy, ancho, alto):
                 zonas.add((cx + dx, cy + dy))
+
+def _marcar_radio(bx, by, r, ancho, alto, zonas):
+    for nx in range(bx - r, bx + r + 1):
+        for ny in range(by - r, by + r + 1):
+            if dentro_del_tablero(nx, ny, ancho, alto):
+                zonas.add((nx, ny))
+
+def _peligros_bombas(bombas, ancho, alto, zonas):
+    for tipo, bx, by in bombas:
+        r = 2 if tipo == 'G' else 1
+        _marcar_radio(bx, by, r, ancho, alto, zonas)
+
+def calcular_peligros(cab_en, bombas, ancho, alto):
+    zonas = set()
+    _peligros_enemigos(cab_en, ancho, alto, zonas)
+    _peligros_bombas(bombas, ancho, alto, zonas)
     return zonas
 
 def es_pasillo(nx, ny, ancho, alto, obs_sim):
-    libres = sum(
-        1 for vx, vy in [(0, -1), (0, 1), (-1, 0), (1, 0)]
-        if 0 <= (nx + vx) < ancho and 0 <= (ny + vy) < alto and (nx + vx, ny + vy) not in obs_sim
-    )
+    libres = 0
+    for vx, vy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
+        tx, ty = nx + vx, ny + vy
+        if dentro_del_tablero(tx, ty, ancho, alto) and (tx, ty) not in obs_sim:
+            libres += 1
     return libres <= 2
+
 
 def es_borde(nx, ny, ancho, alto):
     return nx in (0, ancho - 1) or ny in (0, alto - 1)
 
 def evaluar_pasillo_borde(nx, ny, ancho, alto, obs_sim, cab_en, sig_pos, f_dist):
-    if not cab_en: 
-        return 0
-    
+    if not cab_en: return 0
     dist_cabeza = f_dist(sig_pos)
     pts_pasillo = -60000 * int(dist_cabeza <= 8 and es_pasillo(nx, ny, ancho, alto, obs_sim))
     pts_borde = -15000 * int(dist_cabeza <= 4 and es_borde(nx, ny, ancho, alto))
-    
     return pts_pasillo + pts_borde
 
 def evaluar_defensa(sig_pos, zonas, esp, esp_seguro, cola, obs, an, al):
-    pts = -1400 if sig_pos in zonas else 0
+    pts = -15000 if sig_pos in zonas else 0
     pts += esp * 8 if esp >= esp_seguro else -3200
     if cola and not hay_camino_a_objetivo(sig_pos, cola, obs, an, al): pts -= 8000
     return pts
@@ -207,7 +232,6 @@ def evaluar_ofensiva(esp_before, obs_sim, zonas, an, al, est_len, sig_pos, comid
     pts += (CONFIG['KILL_VALUE'] * CONFIG['KILL_MULT'] + 300) * int(posible_kill)
     pts += (valor_comida * 100 * mi_mult * CONFIG['APPLE_MULT']) * int(sig_pos in comida)
     pts += CONFIG['X_BONUS'] * int(sig_pos in pickups)
-    
     return pts, posible_kill
 
 def evaluar_tortuga(sig_pos, zonas, comida, area, mi_pts, riv_pts, dist_en, p_kill):
@@ -217,9 +241,7 @@ def evaluar_tortuga(sig_pos, zonas, comida, area, mi_pts, riv_pts, dist_en, p_ki
         pts -= (CONFIG['APPLE_VALUE'] * 2) * int(sig_pos in comida)
         pts += area * 3
 
-    if dist_en == 0:
-        return pts - 6000
-    
+    if dist_en == 0: return pts - 6000
     pts_dist = -1200 if (dist_en == 1 and not p_kill) else (dist_en * 5)
     return pts + pts_dist
 
@@ -236,7 +258,6 @@ def evaluar_manzanas(sig_pos, obj, d_manz, d_en_com, cx, cy, esp):
 
 def evaluar_movimiento(sig_pos, cab_ia, kwargs_eval):
     an, al, obs_tot, zonas, e_seg, cola, cab_en, cuerp_en, comida, esp_bef, mi_pts, riv_pts, cx, cy, d_en_manz, f_dist, pickups, mi_mult, valor_comida = kwargs_eval
-    
     area_total = an * al
     
     espacio = calcular_espacio_libre(sig_pos, obs_tot, zonas, an, al, area_total)
@@ -271,12 +292,12 @@ def f_dist_factory(cab_en):
 
 def obtener_movimiento_ia(board_string, mi_lado, mi_puntaje=0, rival_puntaje=0, mi_mult=1, game_id=None):
     filas = board_string.strip('\n').split('\n')
-    cab, cuerpo, cab_en, cuerp_en, comida, paredes, pickups, valor_comida = analizar_tablero(filas, mi_lado)
+    cab, cuerpo, cab_en, cuerp_en, comida, paredes, pickups, valor_comida, bombas = analizar_tablero(filas, mi_lado)
     
-    if not cab: return "UP"
+    if not cab: return "move", "UP"
     ancho, alto = len(filas[0]), len(filas)
     obs = set(cuerpo) | cuerp_en | paredes
-    zonas = calcular_peligros(cab_en, ancho, alto)
+    zonas = calcular_peligros(cab_en, bombas, ancho, alto)
     
     objetivos = comida + (pickups if mi_mult < 4 else [])
     
@@ -295,7 +316,9 @@ def obtener_movimiento_ia(board_string, mi_lado, mi_puntaje=0, rival_puntaje=0, 
         return -999999
 
     opciones = [(0, -1, "UP"), (0, 1, "DOWN"), (-1, 0, "LEFT"), (1, 0, "RIGHT")]
-    return max(opciones, key=get_pts)[2]
+    mejor_dir = max(opciones, key=get_pts)[2]
+    
+    return "move", mejor_dir
 
 
 async def send(websocket, action, data): # pragma: no cover
@@ -311,11 +334,8 @@ def extraer_estado_jugador(data, side):
     p1, pts1 = data.get("player_1", "Jugador 1"), data.get("score_1", 0)
     p2, pts2 = data.get("player_2", "Jugador 2"), data.get("score_2", 0)
     m1, m2 = data.get("multiplier_1", 1), data.get("multiplier_2", 1)
-    
     marcador = f"{p1}: {pts1} pts (x{m1}) | {p2}: {pts2} pts (x{m2})"
-    
-    if side == 'A':
-        return pts1, pts2, m1, marcador
+    if side == 'A': return pts1, pts2, m1, marcador
     return pts2, pts1, m2, marcador
 
 async def handle_your_turn(websocket, data): # pragma: no cover
@@ -330,8 +350,8 @@ async def handle_your_turn(websocket, data): # pragma: no cover
             return 
         active_games[game_id] = {"tablero": board_string, "marcador": marcador, "side": side, "game_over": False}
     
-    mov = obtener_movimiento_ia(board_string, side, mi_pts, riv_pts, mi_mult, game_id)
-    await send(websocket, "move", {"game_id": game_id, "turn_token": data.get("turn_token"), "direction": mov})
+    accion, mov = obtener_movimiento_ia(board_string, side, mi_pts, riv_pts, mi_mult, game_id)
+    await send(websocket, accion, {"game_id": game_id, "turn_token": data.get("turn_token"), "direction": mov})
 
 def handle_game_over(data): # pragma: no cover
     game_id = data.get("game_id")
@@ -378,16 +398,12 @@ if __name__ == "__main__": # pragma: no cover
     if len(sys.argv) < 2:
         print("Uso: python run_v3.py <TU_TOKEN>")
         sys.exit(1)
-    
     token = sys.argv[1]
-
     def run_asyncio_client():
         try: asyncio.run(start(token))
         except KeyboardInterrupt: pass
-
     hilo_websocket = threading.Thread(target=run_asyncio_client, daemon=True, name="WebSocketClient")
     hilo_websocket.start()
-    
     try: iniciar_interfaz_multitab(get_all_games)
     except Exception:
         while True: pass
