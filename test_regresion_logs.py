@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from run_v4 import (
+from run_v3 import (
     clasificar_comida,
     escanear_completo,
     mapear_espacios,
