@@ -79,7 +79,6 @@ def test_encerrado_no_repite_el_mismo_choque_partida6():
 
 
 def test_callejon_prefiere_movimiento_legal_a_la_pared():
-    # Antes: movimiento ilegal (-999999) puntuaba más que uno legal pero malo (-1.8M)
     tablero = "\n".join(["|||||", "|A.B|", "|||||"])
     assert obtener_movimiento_ia(tablero, "A", 0, 0, 1, "t") == "RIGHT"
 
@@ -101,21 +100,21 @@ def _tablero_vacio(ancho=13, alto=9):
 
 def test_zonas_de_bomba_exactas():
     g = _tablero_vacio()
-    g[3][4] = BOMBA_GRANDE   # zona 5x5: x 2..6, y 1..5
-    g[7][10] = BOMBA_CHICA   # zona 3x3: x 9..11, y 6..8
+    g[3][4] = BOMBA_GRANDE  
+    g[7][10] = BOMBA_CHICA  
     g[8][7] = "A"
     t = escanear_completo(["".join(f) for f in g], "A")
     assert len(t.zonas_bomba) == 25 + 9
-    assert (6, 5) in t.zonas_bomba and (7, 3) not in t.zonas_bomba      # borde de la grande
-    assert (9, 6) in t.zonas_bomba and (8, 6) not in t.zonas_bomba      # borde de la chica
+    assert (6, 5) in t.zonas_bomba and (7, 3) not in t.zonas_bomba    
+    assert (9, 6) in t.zonas_bomba and (8, 6) not in t.zonas_bomba      
 
 
 def test_comida_de_cola_solo_la_de_mi_letra():
     g = _tablero_vacio()
-    g[7][2], g[7][4], g[8][7] = "\u24b6", "\u24b7", "A"   # Ⓐ, Ⓑ, mi cabeza
+    g[7][2], g[7][4], g[8][7] = "\u24b6", "\u24b7", "A"   
     t = escanear_completo(["".join(f) for f in g], "A")
-    assert (2, 7) in t.comida          # Ⓐ la puedo comer (+100 x mult)
-    assert (4, 7) not in t.comida      # Ⓑ es del rival: pisarla sólo la limpia
+    assert (2, 7) in t.comida         
+    assert (4, 7) not in t.comida      
 
 
 def test_espacio_del_enemigo_no_se_calcula_con_sus_propios_vecinos_bloqueados():
@@ -124,5 +123,5 @@ def test_espacio_del_enemigo_no_se_calcula_con_sus_propios_vecinos_bloqueados():
     obs = set(t.cuerpo) | t.cuerp_en | t.paredes
     con_zonas = mapear_espacios(t.cab_en, obs, calcular_peligros(t.cab_en, 11, 6), 11, 6)
     sin_zonas = mapear_espacios(t.cab_en, obs, frozenset(), 11, 6)
-    assert con_zonas[(4, 2)] == 1      # el bug de la v3: el enemigo "no puede moverse"
+    assert con_zonas[(4, 2)] == 1    
     assert sin_zonas[(4, 2)] == 66
