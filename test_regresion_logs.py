@@ -1,14 +1,3 @@
-"""
-Regresiones sacadas de las partidas reales (my_match 5, 6 y 7).
-
-Cada fixture es un tablero donde la v3 hizo algo que le costó puntos:
-  - choque       -> borra el puntaje, pierde la cola y se la regala al rival
-  - bomba        -> la explosión borra el puntaje
-  - digito_malo  -> -500
-
-La propiedad que se verifica: el bot elige SIEMPRE la mejor categoría disponible
-(ok < digito_malo < bomba < choque), usando un motor de reglas independiente del bot.
-"""
 import json
 from pathlib import Path
 
