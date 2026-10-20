@@ -24,9 +24,9 @@ CONFIG = {
     'BOMB_MARGIN': 3000,       
 }
 
-# Radio de explosión por tipo de bomba (distancia de Chebyshev a la cabeza)
-RADIO_BOMBA = {'\U0001F4A3': 2, '\U0001F9E8': 1}   # 💣 grande, 🧨 chica
-COMIDA_COLA = {'A': '\u24b6', 'B': '\u24b7'}       # Ⓐ / Ⓑ: sólo la come el dueño de la letra
+
+RADIO_BOMBA = {'\U0001F4A3': 2, '\U0001F9E8': 1}   
+COMIDA_COLA = {'A': '\u24b6', 'B': '\u24b7'}       
 
 DIRECCIONES = [(0, -1), (0, 1), (-1, 0), (1, 0)]
 
