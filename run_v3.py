@@ -474,7 +474,7 @@ if __name__ == "__main__": # pragma: no cover
     hilo_websocket.start()
 
     try:
-        from interfaz import iniciar_interfaz_multitab  # import tardío: los tests no necesitan tkinter
+        from interfaz import iniciar_interfaz_multitab  
         iniciar_interfaz_multitab(get_all_games)
     except Exception as e:
         print(f"[!] Sin interfaz ({e}); el bot sigue jugando.")
