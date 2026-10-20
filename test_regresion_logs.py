@@ -25,8 +25,14 @@ def _es_fuera_de_limites_o_choque(g, nx, ny, ancho, alto):
         return True
     return g[ny][nx] in "|#-ABab"
 
+def _extraer_digitos(g):
+    """Extrae los números del tablero como enteros únicos."""
+    tablero_plano = "".join(g)
+    return {int(c) for c in tablero_plano if c in "123456789"}
+
 def _obtener_objetivo_comida(g):
-    digitos = {int(c) for fila in g for c in fila if c in "123456789"}
+    """Determina el número objetivo a comer."""
+    digitos = _extraer_digitos(g)
     for d in digitos:
         if ((d - 2) % 9 + 1) not in digitos:
             return d
