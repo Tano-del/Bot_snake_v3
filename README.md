@@ -1,36 +1,25 @@
-# Snake Bot V3 - A* & Flood Fill
+# Bot Snake
 
-Bot cliente para un servidor de Snake multijugador. Utiliza una IA basada en algoritmos deterministas (A* y Flood Fill) para la toma de decisiones, e incluye herramientas de simulación y optimización local.
+Bot de Snake con IA A* y una interfaz para monitorear partidas.
 
-## Estrategia de la IA
+## Uso
 
-El comportamiento del bot se define en `run_v3.py` mediante parámetros configurables y las siguientes lógicas:
+Instalá las dependencias:
 
-* **A-Star (A*):** Búsqueda de rutas óptimas hacia la comida utilizando la heurística de distancia de Manhattan.
-* **Control Espacial (Flood Fill):** Evaluación constante de las casillas transitables para evitar callejones sin salida.
-* **Sensor Anti-Túneles:** Detección de corredores estrechos y bordes con enemigos cercanos, aplicando penalizaciones para prevenir encierros.
-* **Modo Tortuga:** Comportamiento defensivo automático que se activa al obtener una ventaja considerable en el marcador.
+```bash
+python -m pip install -r requirements.txt
+```
 
-## Estructura del Proyecto
+Iniciá el bot desde esta carpeta, pasando tu token:
 
-* `run_v3.py`: Cliente asíncrono principal (WebSockets) y cerebro de la IA.
-* `interfaz.py`: Monitor gráfico multi-pestaña construido con `tkinter` para ver las partidas en tiempo real.
+```bash
+python run_v4.py TU_TOKEN
+```
 
-## Instalación
+Las imágenes de la interfaz están en `Imagenes/`.
 
-El proyecto requiere Python 3. Instala la dependencia de red ejecutando
+## Pruebas
 
-
-pip install websockets==12.0
-
-
-
-
-##  Uso
-
-**1. Jugar en el servidor online (inicia el bot y la interfaz):**
-
-python run_v3.py <TU_TOKEN>
-
-
-
+```bash
+python -m pytest -q
+```
