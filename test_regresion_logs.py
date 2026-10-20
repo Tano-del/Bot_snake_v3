@@ -28,29 +28,61 @@ BOMBA_GRANDE, BOMBA_CHICA = "\U0001F4A3", "\U0001F9E8"
 GRAVEDAD = {"ok": 0, "digito_malo": 1, "bomba": 2, "choque": 3}
 
 
-def clasificar_destino(board, lado, mov):
-    """Reglas del juego (v8) aplicadas a un movimiento, sin usar código del bot."""
-    g = [list(r) for r in board.strip("\n").split("\n")]
-    alto, ancho = len(g), len(g[0])
-    cabeza = next((x, y) for y, r in enumerate(g) for x, c in enumerate(r) if c == lado)
-    nx, ny = cabeza[0] + DIRS[mov][0], cabeza[1] + DIRS[mov][1]
+def _obtener_cabeza(g, lado):
+    return next((x, y) for y, fila in enumerate(g) for x, c in enumerate(fila) if c == lado)
+
+def _es_fuera_de_limites_o_choque(g, nx, ny, ancho, alto):
     if not (0 <= nx < ancho and 0 <= ny < alto):
+        return True
+    return g[ny][nx] in "|#-ABab"
+
+def _obtener_objetivo_comida(g):
+    digitos = {int(c) for fila in g for c in fila if c in "123456789"}
+    for d in digitos:
+        if ((d - 2) % 9 + 1) not in digitos:
+            return d
+    return None
+
+def _es_digito_erroneo(g, celda):
+    if celda not in "123456789":
+        return False
+    objetivo = _obtener_objetivo_comida(g)
+    return objetivo is None or int(celda) != objetivo
+
+def _en_rango_de_bomba(celda, x, y, nx, ny):
+    distancia = max(abs(x - nx), abs(y - ny))
+    if celda == BOMBA_GRANDE and distancia <= 2:
+        return True
+    return celda == BOMBA_CHICA and distancia <= 1
+
+def _es_zona_bomba(g, nx, ny):
+    for y, fila in enumerate(g):
+        for x, celda in enumerate(fila):
+            if celda in (BOMBA_GRANDE, BOMBA_CHICA):
+                if _en_rango_de_bomba(celda, x, y, nx, ny):
+                    return True
+    return False
+
+def clasificar_destino(board, lado, mov):
+    """Reglas del juego (v8) aplicadas a un movimiento, refactorizado a Clase A."""
+    g = board.strip("\n").split("\n")
+    alto, ancho = len(g), len(g[0])
+
+    cabeza = _obtener_cabeza(g, lado)
+    nx, ny = cabeza[0] + DIRS[mov][0], cabeza[1] + DIRS[mov][1]
+
+    if _es_fuera_de_limites_o_choque(g, nx, ny, ancho, alto):
         return "choque"
+        
     celda = g[ny][nx]
-    if celda in "|#-" or celda in ("A", "B", "a", "b"):
-        return "choque"
-    digitos = {int(c) for r in g for c in r if c in "123456789"}
-    objetivo = [d for d in digitos if ((d - 2) % 9 + 1) not in digitos]
-    if celda in "123456789" and (not objetivo or int(celda) != objetivo[0]):
+    
+    if _es_digito_erroneo(g, celda):
         return "digito_malo"
-    for y, r in enumerate(g):
-        for x, c in enumerate(r):
-            radio = 2 if c == BOMBA_GRANDE else 1 if c == BOMBA_CHICA else None
-            if radio is not None and max(abs(x - nx), abs(y - ny)) <= radio:
-                return "bomba"
+        
+    if _es_zona_bomba(g, nx, ny):
+        return "bomba"
+        
     return "ok"
-
-
 @pytest.mark.parametrize(
     "fx", FIXTURES,
     ids=[f"p{f['partida']}-t{f['turno_global']}-{f['que_paso']}" for f in FIXTURES],
