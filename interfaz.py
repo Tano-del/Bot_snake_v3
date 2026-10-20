@@ -1,6 +1,8 @@
 import tkinter as tk
 from tkinter import ttk
 
+MAX_PARTIDAS_VISIBLES = 5
+
 def iniciar_interfaz_multitab(get_games_func):
     """
     Crea una única ventana principal con un sistema de pestañas (Notebook) 
@@ -34,8 +36,15 @@ def iniciar_interfaz_multitab(get_games_func):
 
     def actualizar_tabs():
         juegos_actuales = get_games_func()
+        juegos_visibles = dict(list(juegos_actuales.items())[-MAX_PARTIDAS_VISIBLES:])
+
+        for game_id in list(pestanas):
+            if game_id not in juegos_visibles:
+                frame = pestanas.pop(game_id)["frame"]
+                notebook.forget(frame)
+                frame.destroy()
         
-        for game_id, data in juegos_actuales.items():
+        for game_id, data in juegos_visibles.items():
             if game_id not in pestanas:
                 frame = tk.Frame(notebook, bg="black")
                 notebook.add(frame, text=f"Partida {game_id[:6]}...")
@@ -55,15 +64,11 @@ def iniciar_interfaz_multitab(get_games_func):
                 pestanas[game_id] = {
                     "frame": frame,
                     "canvas": canvas,
-                    "label": etiqueta_marcador,
-                    "dibujado_final": False 
+                    "label": etiqueta_marcador
                 }
             
             tab_info = pestanas[game_id]
             tab_info["label"].config(text=data["marcador"])
-            
-            if data.get("game_over") and tab_info["dibujado_final"]:
-                continue 
 
             canvas = tab_info["canvas"]
             canvas.delete("all")
@@ -105,10 +110,6 @@ def iniciar_interfaz_multitab(get_games_func):
                         canvas.create_image(pos_x, pos_y, image=imagenes["su_cabeza"], anchor="nw")
                     elif char in ['a', 'b'] and char != char_mi_cuerpo:
                         canvas.create_image(pos_x, pos_y, image=imagenes["su_cuerpo"], anchor="nw")
-
-            if data.get("game_over"):
-                tab_info["dibujado_final"] = True
-                tab_info["label"].config(fg="red")
 
         ventana.after(100, actualizar_tabs)
 

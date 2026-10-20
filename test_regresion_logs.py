@@ -1,0 +1,128 @@
+"""
+Regresiones sacadas de las partidas reales (my_match 5, 6 y 7).
+
+Cada fixture es un tablero donde la v3 hizo algo que le costó puntos:
+  - choque       -> borra el puntaje, pierde la cola y se la regala al rival
+  - bomba        -> la explosión borra el puntaje
+  - digito_malo  -> -500
+
+La propiedad que se verifica: el bot elige SIEMPRE la mejor categoría disponible
+(ok < digito_malo < bomba < choque), usando un motor de reglas independiente del bot.
+"""
+import json
+from pathlib import Path
+
+import pytest
+
+from run_v4 import (
+    clasificar_comida,
+    escanear_completo,
+    mapear_espacios,
+    calcular_peligros,
+    obtener_movimiento_ia,
+)
+
+FIXTURES = json.loads((Path(__file__).parent / "fixtures_logs.json").read_text(encoding="utf-8"))
+DIRS = {"UP": (0, -1), "DOWN": (0, 1), "LEFT": (-1, 0), "RIGHT": (1, 0)}
+BOMBA_GRANDE, BOMBA_CHICA = "\U0001F4A3", "\U0001F9E8"
+GRAVEDAD = {"ok": 0, "digito_malo": 1, "bomba": 2, "choque": 3}
+
+
+def clasificar_destino(board, lado, mov):
+    """Reglas del juego (v8) aplicadas a un movimiento, sin usar código del bot."""
+    g = [list(r) for r in board.strip("\n").split("\n")]
+    alto, ancho = len(g), len(g[0])
+    cabeza = next((x, y) for y, r in enumerate(g) for x, c in enumerate(r) if c == lado)
+    nx, ny = cabeza[0] + DIRS[mov][0], cabeza[1] + DIRS[mov][1]
+    if not (0 <= nx < ancho and 0 <= ny < alto):
+        return "choque"
+    celda = g[ny][nx]
+    if celda in "|#-" or celda in ("A", "B", "a", "b"):
+        return "choque"
+    digitos = {int(c) for r in g for c in r if c in "123456789"}
+    objetivo = [d for d in digitos if ((d - 2) % 9 + 1) not in digitos]
+    if celda in "123456789" and (not objetivo or int(celda) != objetivo[0]):
+        return "digito_malo"
+    for y, r in enumerate(g):
+        for x, c in enumerate(r):
+            radio = 2 if c == BOMBA_GRANDE else 1 if c == BOMBA_CHICA else None
+            if radio is not None and max(abs(x - nx), abs(y - ny)) <= radio:
+                return "bomba"
+    return "ok"
+
+
+@pytest.mark.parametrize(
+    "fx", FIXTURES,
+    ids=[f"p{f['partida']}-t{f['turno_global']}-{f['que_paso']}" for f in FIXTURES],
+)
+def test_no_repite_el_error_de_la_v3(fx):
+    mov = obtener_movimiento_ia(fx["board"], fx["lado"], fx["puntaje"], fx["rival"], fx["mult"], "log")
+    clases = {m: clasificar_destino(fx["board"], fx["lado"], m) for m in DIRS}
+    mejor = min(clases.values(), key=GRAVEDAD.get)
+    assert clases[mov] == mejor, f"eligió {mov} ({clases[mov]}) habiendo {mejor}: {clases}"
+
+
+def _fixture(partida, puntaje):
+    return next(f for f in FIXTURES if f["partida"] == partida and f["puntaje"] == puntaje)
+
+
+def test_encerrado_prefiere_digito_malo_antes_que_chocar_partida5():
+    """Perdió 8946 puntos y 8 segmentos chocando con su cuerpo cuando RIGHT sólo costaba -500."""
+    fx = _fixture("5", 8946)
+    assert obtener_movimiento_ia(fx["board"], fx["lado"], fx["puntaje"], fx["rival"], fx["mult"], "x") == "RIGHT"
+
+
+def test_encerrado_no_repite_el_mismo_choque_partida6():
+    """Espiral de -500 por turno (hasta -3000 y derrota) repitiendo el mismo choque."""
+    fx = _fixture("6", 4365)
+    assert obtener_movimiento_ia(fx["board"], fx["lado"], fx["puntaje"], fx["rival"], fx["mult"], "x") == "RIGHT"
+
+
+def test_callejon_prefiere_movimiento_legal_a_la_pared():
+    # Antes: movimiento ilegal (-999999) puntuaba más que uno legal pero malo (-1.8M)
+    tablero = "\n".join(["|||||", "|A.B|", "|||||"])
+    assert obtener_movimiento_ia(tablero, "A", 0, 0, 1, "t") == "RIGHT"
+
+
+def test_todas_las_copias_de_un_digito_son_conocidas():
+    raw = [("3", 1, 1), ("3", 5, 5), ("3", 9, 2), ("4", 2, 2), ("4", 7, 7)]
+    buena, mala, valor = clasificar_comida(raw)
+    assert sorted(buena) == [(1, 1), (5, 5), (9, 2)]
+    assert mala == {(2, 2), (7, 7)}
+    assert valor == 3
+
+
+def _tablero_vacio(ancho=13, alto=9):
+    g = [[" "] * ancho for _ in range(alto)]
+    for y in range(alto):
+        g[y][0] = g[y][-1] = "|"
+    return g
+
+
+def test_zonas_de_bomba_exactas():
+    g = _tablero_vacio()
+    g[3][4] = BOMBA_GRANDE   # zona 5x5: x 2..6, y 1..5
+    g[7][10] = BOMBA_CHICA   # zona 3x3: x 9..11, y 6..8
+    g[8][7] = "A"
+    t = escanear_completo(["".join(f) for f in g], "A")
+    assert len(t.zonas_bomba) == 25 + 9
+    assert (6, 5) in t.zonas_bomba and (7, 3) not in t.zonas_bomba      # borde de la grande
+    assert (9, 6) in t.zonas_bomba and (8, 6) not in t.zonas_bomba      # borde de la chica
+
+
+def test_comida_de_cola_solo_la_de_mi_letra():
+    g = _tablero_vacio()
+    g[7][2], g[7][4], g[8][7] = "\u24b6", "\u24b7", "A"   # Ⓐ, Ⓑ, mi cabeza
+    t = escanear_completo(["".join(f) for f in g], "A")
+    assert (2, 7) in t.comida          # Ⓐ la puedo comer (+100 x mult)
+    assert (4, 7) not in t.comida      # Ⓑ es del rival: pisarla sólo la limpia
+
+
+def test_espacio_del_enemigo_no_se_calcula_con_sus_propios_vecinos_bloqueados():
+    filas = ["...........", "...........", "....B......", "...........", "......A....", "..........."]
+    t = escanear_completo(filas, "A")
+    obs = set(t.cuerpo) | t.cuerp_en | t.paredes
+    con_zonas = mapear_espacios(t.cab_en, obs, calcular_peligros(t.cab_en, 11, 6), 11, 6)
+    sin_zonas = mapear_espacios(t.cab_en, obs, frozenset(), 11, 6)
+    assert con_zonas[(4, 2)] == 1      # el bug de la v3: el enemigo "no puede moverse"
+    assert sin_zonas[(4, 2)] == 66
