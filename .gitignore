@@ -1,3 +1,5 @@
 __pycache__/
 *.pyc
 variants/
+.tokens_test.json
+.coverage
