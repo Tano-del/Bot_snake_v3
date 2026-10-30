@@ -93,7 +93,9 @@ def renderizar_tablero(tab_info, data, imagenes):
         width=len(filas[0]) * TAMANO_CELDA,
         height=len(filas) * TAMANO_CELDA,
     )
-    t = escanear_completo(filas, data["side"])
+    t = escanear_completo(
+        filas, data["side"], data.get("mi_inv", 0), data.get("riv_inv", 0)
+    )
     for y, fila in enumerate(filas):
         for x, char in enumerate(fila):
             dibujar_celda(canvas, x, y, char, imagenes, t)

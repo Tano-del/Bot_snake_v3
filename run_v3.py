@@ -31,6 +31,7 @@ CONFIG = {
     'CUT_BONUS': 5000,
     'SHOOT_COST': 5000,
     'CRASH_COST': 20_000_000,
+    'CRASH_COST_INV': 500_000,
     'MALA_COST': 2_500_000,
     'BOMB_MARGIN': 5_000_000,
 }
@@ -63,6 +64,7 @@ class Tablero(NamedTuple):
     estrellas: set = frozenset()
     mi_inv: bool = False
     riv_inv: bool = False
+    inv_seguro: bool = False
 
 
 class Contexto(NamedTuple):
@@ -332,6 +334,7 @@ def escanear_completo(filas, mi_lado, mi_inv=0, riv_inv=0):
         estrellas,
         soy_inv,
         en_inv,
+        soy_inv and mi_inv != 1,
     )
 
 
@@ -508,10 +511,15 @@ def costo_celda(sig, malas, zonas_bomba, mi_pts, mi_inv=False):
     return costo
 
 
+def costo_choque(c):
+    # Invencible: chocar no resta puntos, solo deja la snake en el lugar.
+    return CONFIG['CRASH_COST_INV'] if c.mi_inv else CONFIG['CRASH_COST']
+
+
 def puntuar_movimiento(mov, cab, c):
     nx, ny = cab[0] + mov[0], cab[1] + mov[1]
     if not dentro_tablero(nx, ny, c.ancho, c.alto) or (nx, ny) in c.obs_duro:
-        return -CONFIG['CRASH_COST']
+        return -costo_choque(c)
     sig = (nx, ny)
     pts = evaluar_movimiento(sig, cab, c)
     return pts - costo_celda(sig, c.malas, c.zonas_bomba, c.mi_pts, c.mi_inv)
@@ -544,10 +552,12 @@ def f_dist_factory(cab_en):
 
 
 def obstaculos_segun_estado(t):
-    en_bloquea = not (t.mi_inv and len(t.cuerp_en) > 1)
+    # Solo se relajan las penalidades si quedan 2+ turnos de invencibilidad:
+    # con 1 turno restante no sabemos si el turno actual sigue cubierto.
+    en_bloquea = not (t.inv_seguro and len(t.cuerp_en) > 1)
     obs_en = t.cuerp_en if en_bloquea else set()
     obs_duro = set(t.cuerpo) | t.paredes | obs_en
-    if t.mi_inv:
+    if t.inv_seguro:
         return obs_duro, obs_duro
     return obs_duro, obs_duro | t.malas | t.zonas_bomba
 
@@ -557,7 +567,7 @@ def construir_contexto(t, ancho, alto, mi_pts, riv_pts, mi_mult):
     objetivos = t.comida + t.pickups
     peligros = (
         frozenset()
-        if (t.mi_inv and not t.riv_inv)
+        if (t.inv_seguro and not t.riv_inv)
         else calcular_peligros(t.cab_en, ancho, alto)
     )
     return Contexto(
@@ -568,7 +578,7 @@ def construir_contexto(t, ancho, alto, mi_pts, riv_pts, mi_mult):
         mi_pts, riv_pts, ancho // 2, alto // 2,
         mapear_distancias(objetivos, t.cab_en, obs_duro, ancho, alto),
         f_dist_factory(t.cab_en), t.pickups, objetivos, t.valores, mi_mult,
-        t.estrellas, t.mi_inv, t.riv_inv,
+        t.estrellas, t.inv_seguro, t.riv_inv,
     )
 
 
@@ -684,6 +694,8 @@ async def handle_your_turn(websocket, data):  # pragma: no cover
             "tablero": board_string,
             "marcador": marcador,
             "side": side,
+            "mi_inv": mi_inv,
+            "riv_inv": riv_inv,
             "game_over": False,
         }
 

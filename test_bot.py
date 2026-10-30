@@ -6,6 +6,7 @@ import sys
 import pytest
 
 from run_v3 import (
+    CONFIG,
     ESTRELLA,
     active_games,
     analizar_tablero,
@@ -13,6 +14,8 @@ from run_v3 import (
     calcular_espacio_libre,
     calcular_peligros,
     clasificar_comida,
+    construir_contexto,
+    costo_choque,
     encontrar_cola,
     es_pasillo,
     escanear_completo,
@@ -319,6 +322,17 @@ def test_v10_invencible_corta_al_rival():
     ]
     mov = obtener_movimiento_ia("\n".join(filas), 'A', 500, 500, 2, "cut", 25)
     assert mov == "RIGHT"
+
+
+def test_v10_inv_seguro_y_costo_choque():
+    filas = ["|  AAAa  |", "|   bBB  |"]
+    t_seguro = escanear_completo(filas, 'A', mi_inv=2)
+    t_ultimo = escanear_completo(filas, 'A', mi_inv=1)
+    assert t_seguro.inv_seguro and not t_ultimo.inv_seguro
+    ctx_inv = construir_contexto(t_seguro, 10, 2, 100, 100, 1)
+    ctx_fin = construir_contexto(t_ultimo, 10, 2, 100, 100, 1)
+    assert costo_choque(ctx_inv) == CONFIG['CRASH_COST_INV']
+    assert costo_choque(ctx_fin) == CONFIG['CRASH_COST']
 
 
 def test_v9_disparo_cuando_conviene():
